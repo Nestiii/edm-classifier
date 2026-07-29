@@ -37,6 +37,25 @@ def test_index_directory_missing_root(tmp_path: Path):
         index_directory(tmp_path / "nope")
 
 
+def test_index_directory_accepts_dirname_alias(tmp_path: Path):
+    import soundfile as sf
+
+    from edm_classifier.config import settings
+
+    sr = settings.audio.sample_rate
+    root = tmp_path / "aliased"
+    # Legacy "minimal" folder should be read as "minimal/deep tech".
+    (root / "minimal").mkdir(parents=True)
+    sf.write(root / "minimal" / "t.wav", [0.0] * sr, sr, subtype="PCM_16")
+    # The "*_data" segment folders must be ignored.
+    (root / "minimal_data").mkdir()
+
+    records = index_directory(root)
+    assert len(records) == 1
+    assert records[0].subgenre == "minimal/deep tech"
+    assert records[0].label == 6
+
+
 def test_class_distribution(dataset_dir: Path):
     records = index_directory(dataset_dir)
     dist = class_distribution(records)

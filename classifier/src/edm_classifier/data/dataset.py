@@ -17,8 +17,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from edm_classifier.config import (
-    DIRNAME_TO_SUBGENRE,
     SUBGENRE_TO_INDEX,
+    dirname_subgenre_map,
     settings,
 )
 from edm_classifier.features.audio_io import is_supported
@@ -53,7 +53,7 @@ def index_directory(root: str | Path) -> list[TrackRecord]:
         raise FileNotFoundError(f"Dataset root not found or not a directory: {root}")
 
     records: list[TrackRecord] = []
-    for dirname, subgenre in DIRNAME_TO_SUBGENRE.items():
+    for dirname, subgenre in dirname_subgenre_map().items():
         subdir = root / dirname
         if not subdir.is_dir():
             continue

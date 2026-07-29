@@ -42,6 +42,19 @@ SUBGENRE_DIRNAMES: dict[str, str] = {
 # Reverse lookup: directory name -> canonical subgenre label.
 DIRNAME_TO_SUBGENRE: dict[str, str] = {v: k for k, v in SUBGENRE_DIRNAMES.items()}
 
+# Alternate on-disk folder names accepted by the indexer, mapped to their
+# canonical subgenre. Lets a dataset whose folders differ from the canonical
+# dirnames work without renaming (e.g. the legacy "minimal" folder from the
+# earlier "songo" dataset stands for "minimal/deep tech").
+SUBGENRE_DIRNAME_ALIASES: dict[str, str] = {
+    "minimal": "minimal/deep tech",
+}
+
+
+def dirname_subgenre_map() -> dict[str, str]:
+    """Directory-name -> subgenre lookup, including known folder-name aliases."""
+    return {**DIRNAME_TO_SUBGENRE, **SUBGENRE_DIRNAME_ALIASES}
+
 # Integer class id for each subgenre (index in SUBGENRES).
 SUBGENRE_TO_INDEX: dict[str, int] = {name: i for i, name in enumerate(SUBGENRES)}
 
