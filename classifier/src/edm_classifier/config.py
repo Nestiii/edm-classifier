@@ -66,15 +66,29 @@ class AudioConfig(BaseSettings):
 
     sample_rate: int = 22050
     mono: bool = True
-    # Length of each analysed segment, in seconds (Short-chunk CNN uses 2 s).
-    segment_seconds: float = 2.0
+    # Length of each analysed segment, in seconds. The plan describes 2 s
+    # short-chunks; we use 4 s for more rhythmic context (tunable in WBS 4.5).
+    segment_seconds: float = 4.0
     # Fraction of overlap between consecutive segments (0.0 = no overlap).
     segment_overlap: float = 0.5
+    # Seconds trimmed from the start/end before segmenting. EDM intros/outros are
+    # often unrepresentative (bare kick or silence). Skipped automatically when a
+    # track is too short to keep at least one segment after trimming.
+    trim_intro_seconds: float = 15.0
+    trim_outro_seconds: float = 15.0
 
     @property
     def segment_samples(self) -> int:
         """Number of samples in a single segment."""
         return int(round(self.segment_seconds * self.sample_rate))
+
+    @property
+    def trim_intro_samples(self) -> int:
+        return int(round(self.trim_intro_seconds * self.sample_rate))
+
+    @property
+    def trim_outro_samples(self) -> int:
+        return int(round(self.trim_outro_seconds * self.sample_rate))
 
 
 class FeatureConfig(BaseSettings):
@@ -103,7 +117,8 @@ class DatasetConfig(BaseSettings):
 
     model_config = SettingsConfigDict(env_prefix="EDM_DATASET_")
 
-    tracks_per_class: int = 200
+    # Actual dataset is 100 tracks/class (the plan's Req 3.1 target was 200).
+    tracks_per_class: int = 100
     train_ratio: float = 0.70
     val_ratio: float = 0.15
     test_ratio: float = 0.15

@@ -78,6 +78,12 @@ def segment_waveform(
     overlap = min(max(config.segment_overlap, 0.0), 0.95)
     hop = max(1, int(round(seg_len * (1.0 - overlap))))
 
+    # Trim intro/outro, but only if enough audio remains for one full segment.
+    intro = config.trim_intro_samples
+    outro = config.trim_outro_samples
+    if waveform.shape[0] - intro - outro >= seg_len:
+        waveform = waveform[intro : waveform.shape[0] - outro]
+
     n_samples = waveform.shape[0]
     if n_samples <= seg_len:
         padded = np.zeros(seg_len, dtype=waveform.dtype)

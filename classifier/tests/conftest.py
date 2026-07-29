@@ -26,8 +26,14 @@ def waveform() -> np.ndarray:
 
 @pytest.fixture
 def short_waveform() -> np.ndarray:
-    """A waveform shorter than a single 2-second segment."""
+    """A waveform shorter than a single 1-second test segment."""
     return _sine(0.5)
+
+
+@pytest.fixture
+def long_waveform() -> np.ndarray:
+    """A 40-second waveform, long enough to survive intro/outro trimming."""
+    return _sine(40.0)
 
 
 @pytest.fixture

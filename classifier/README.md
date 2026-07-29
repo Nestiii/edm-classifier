@@ -35,6 +35,37 @@ uv run edm-classifier --list-subgenres     # lista los 8 subgéneros
 uv run edm-classifier --help
 ```
 
+## Dataset
+
+Layout esperado (una carpeta por subgénero, nombres filesystem-safe). Los audios
+**no se versionan** (uso académico, sin distribución — legal 8.1):
+
+```
+classifier/data/raw/
+├── deep_house/*.{mp3,aiff,wav}
+├── tech_house/...
+├── melodic_techno/...
+├── progressive/...
+├── techno_peak_time/...
+├── hard_techno/...
+├── minimal_deep_tech/...
+└── trance/...
+```
+
+Flujo de datos (capa `data/`):
+
+```python
+from edm_classifier.data.manifest import build_manifest, save_manifest
+from edm_classifier.data.validate import validate_manifest
+
+entries = build_manifest("classifier/data/raw")     # etiqueta + metadata (WBS 2.4)
+save_manifest(entries, "classifier/data/manifest.csv")
+print(validate_manifest(entries).summary())          # 100/clase, >=128 kbps (WBS 2.3)
+```
+
+Segmentación: ventanas de **4 s** con 50% de solapamiento, recortando ~15 s de
+intro/outro (configurable en `config.py`, tuneable en WBS 4.5).
+
 ## Tests
 
 ```bash
