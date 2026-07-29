@@ -34,4 +34,4 @@ def test_data_pipeline_end_to_end(split_dataset_dir: Path, tmp_path: Path):
     assert splits.exists()
 
     assert main(["preprocess", "--manifest", str(manifest), "--cache", str(cache)]) == 0
-    assert (cache / "segments.npy").exists()
+    assert (cache / "segments.f16").exists()

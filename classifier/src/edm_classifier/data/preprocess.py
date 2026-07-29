@@ -25,10 +25,15 @@ from edm_classifier.config import AudioConfig, FeatureConfig, settings
 from edm_classifier.data.dataset import TrackRecord
 from edm_classifier.features.pipeline import track_to_model_input
 
-SEGMENTS_FILE = "segments.npy"
+# Segments are streamed to a raw float16 file (memory-safe, see below).
+# ``SEGMENTS_NPY`` is the legacy consolidated array kept only for backward-compat
+# reading of caches produced by older versions.
+SEGMENTS_RAW = "segments.f16"
+SEGMENTS_NPY = "segments.npy"
 LABELS_FILE = "labels.npy"
 TRACK_IDS_FILE = "track_ids.npy"
 INDEX_FILE = "index.json"
+SEGMENT_DTYPE = np.float16
 
 
 @dataclass(frozen=True)
@@ -65,49 +70,62 @@ def preprocess_dataset(
     cache_dir = Path(cache_dir)
     cache_dir.mkdir(parents=True, exist_ok=True)
 
-    seg_arrays: list[np.ndarray] = []
+    if not records:
+        raise ValueError("No records to preprocess.")
+
     labels: list[int] = []
     track_ids: list[int] = []
     index_tracks: list[dict[str, object]] = []
-
     total = len(records)
-    for track_id, record in enumerate(records):
-        segments = track_to_model_input(record.path, audio, feat).astype(np.float16)
-        n_seg = segments.shape[0]
-        seg_arrays.append(segments)
-        labels.extend([record.label] * n_seg)
-        track_ids.extend([track_id] * n_seg)
-        index_tracks.append(
-            {
-                "track_id": track_id,
-                "path": str(record.path),
-                "subgenre": record.subgenre,
-                "label": record.label,
-                "n_segments": n_seg,
-            }
-        )
-        if progress is not None:
-            progress(track_id + 1, total)
+    total_segments = 0
+    n_mels: int | None = None
+    n_frames: int | None = None
 
-    if not seg_arrays:
-        raise ValueError("No records to preprocess.")
+    # Stream each track's segments straight to disk (C-order float16). Peak
+    # memory is one track's segments, not the whole dataset — avoids the OOM
+    # that a concatenate-everything-then-save approach hits on large datasets.
+    raw_path = cache_dir / SEGMENTS_RAW
+    with open(raw_path, "wb") as fh:
+        for track_id, record in enumerate(records):
+            segments = track_to_model_input(record.path, audio, feat).astype(SEGMENT_DTYPE)
+            if n_mels is None:
+                n_mels, n_frames = int(segments.shape[2]), int(segments.shape[3])
+            elif (segments.shape[2], segments.shape[3]) != (n_mels, n_frames):
+                raise ValueError(
+                    f"Inconsistent segment shape for {record.path}: "
+                    f"got {segments.shape[2:]}, expected {(n_mels, n_frames)}."
+                )
+            segments.tofile(fh)  # appends raw C-order bytes
 
-    segments = np.concatenate(seg_arrays, axis=0)
-    labels_arr = np.asarray(labels, dtype=np.int64)
-    track_ids_arr = np.asarray(track_ids, dtype=np.int64)
+            n_seg = int(segments.shape[0])
+            total_segments += n_seg
+            labels.extend([record.label] * n_seg)
+            track_ids.extend([track_id] * n_seg)
+            index_tracks.append(
+                {
+                    "track_id": track_id,
+                    "path": str(record.path),
+                    "subgenre": record.subgenre,
+                    "label": record.label,
+                    "n_segments": n_seg,
+                }
+            )
+            if progress is not None:
+                progress(track_id + 1, total)
 
-    np.save(cache_dir / SEGMENTS_FILE, segments)
-    np.save(cache_dir / LABELS_FILE, labels_arr)
-    np.save(cache_dir / TRACK_IDS_FILE, track_ids_arr)
+    np.save(cache_dir / LABELS_FILE, np.asarray(labels, dtype=np.int64))
+    np.save(cache_dir / TRACK_IDS_FILE, np.asarray(track_ids, dtype=np.int64))
 
-    n_mels, n_frames = segments.shape[2], segments.shape[3]
+    segment_shape = [total_segments, 1, n_mels, n_frames]
     index = {
         "sample_rate": audio.sample_rate,
         "segment_seconds": audio.segment_seconds,
         "n_mels": n_mels,
         "n_frames": n_frames,
         "n_tracks": total,
-        "n_segments": int(segments.shape[0]),
+        "n_segments": total_segments,
+        "segment_shape": segment_shape,
+        "dtype": np.dtype(SEGMENT_DTYPE).name,
         "tracks": index_tracks,
     }
     (cache_dir / INDEX_FILE).write_text(
@@ -117,9 +135,9 @@ def preprocess_dataset(
     return PreprocessResult(
         cache_dir=cache_dir,
         n_tracks=total,
-        n_segments=int(segments.shape[0]),
-        n_mels=n_mels,
-        n_frames=n_frames,
+        n_segments=total_segments,
+        n_mels=int(n_mels),
+        n_frames=int(n_frames),
     )
 
 

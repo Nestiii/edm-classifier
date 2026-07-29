@@ -18,7 +18,9 @@ from edm_classifier.config import AudioConfig, FeatureConfig, settings
 from edm_classifier.data.dataset import TrackRecord
 from edm_classifier.data.preprocess import (
     LABELS_FILE,
-    SEGMENTS_FILE,
+    SEGMENT_DTYPE,
+    SEGMENTS_NPY,
+    SEGMENTS_RAW,
     TRACK_IDS_FILE,
     load_cache_index,
 )
@@ -69,14 +71,27 @@ class CachedSegmentDataset(Dataset):
 
     def __init__(self, cache_dir: str | Path) -> None:
         self.cache_dir = Path(cache_dir)
-        self.segments = np.load(self.cache_dir / SEGMENTS_FILE, mmap_mode="r")
+        self.index = load_cache_index(self.cache_dir)
+        self.segments = self._open_segments()
         self.labels = np.load(self.cache_dir / LABELS_FILE)
         self.track_ids = np.load(self.cache_dir / TRACK_IDS_FILE)
-        self.index = load_cache_index(self.cache_dir)
         # Map each track's absolute path to its stable track id.
         self._path_to_track_id = {
             str(t["path"]): int(t["track_id"]) for t in self.index["tracks"]
         }
+
+    def _open_segments(self) -> np.ndarray:
+        """Memory-map the segment array (raw float16 preferred, legacy .npy)."""
+        raw = self.cache_dir / SEGMENTS_RAW
+        if raw.exists():
+            shape = tuple(self.index["segment_shape"])
+            return np.memmap(raw, dtype=SEGMENT_DTYPE, mode="r", shape=shape)
+        legacy = self.cache_dir / SEGMENTS_NPY
+        if legacy.exists():
+            return np.load(legacy, mmap_mode="r")
+        raise FileNotFoundError(
+            f"No segment cache ({SEGMENTS_RAW} or {SEGMENTS_NPY}) in {self.cache_dir}."
+        )
 
     def __len__(self) -> int:
         return int(self.segments.shape[0])

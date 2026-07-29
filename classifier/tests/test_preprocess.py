@@ -10,7 +10,7 @@ from edm_classifier.config import settings
 from edm_classifier.data.dataset import index_directory
 from edm_classifier.data.preprocess import (
     INDEX_FILE,
-    SEGMENTS_FILE,
+    SEGMENTS_RAW,
     load_cache_index,
     preprocess_dataset,
 )
@@ -28,7 +28,7 @@ def test_preprocess_writes_cache(dataset_dir: Path, tmp_path: Path):
     cache = tmp_path / "cache"
     result = preprocess_dataset(records, cache)
 
-    assert (cache / SEGMENTS_FILE).exists()
+    assert (cache / SEGMENTS_RAW).exists()
     assert (cache / INDEX_FILE).exists()
     assert result.n_tracks == len(records)
     assert result.n_segments >= len(records)  # >= 1 segment per track
@@ -37,6 +37,22 @@ def test_preprocess_writes_cache(dataset_dir: Path, tmp_path: Path):
     index = load_cache_index(cache)
     assert index["n_tracks"] == len(records)
     assert len(index["tracks"]) == len(records)
+
+
+def test_cached_segments_roundtrip_values(dataset_dir: Path, tmp_path: Path):
+    import numpy as np
+
+    from edm_classifier.features.pipeline import track_to_model_input
+
+    records = index_directory(dataset_dir)
+    cache = tmp_path / "cache"
+    preprocess_dataset(records, cache)
+
+    ds = CachedSegmentDataset(cache)
+    # The first cached segment must match the pipeline output for track 0.
+    expected = track_to_model_input(records[0].path)[0].astype(np.float16)
+    got = np.asarray(ds.segments[0], dtype=np.float16)
+    np.testing.assert_array_equal(got, expected)
 
 
 def test_cached_dataset_items(dataset_dir: Path, tmp_path: Path):
