@@ -52,19 +52,29 @@ classifier/data/raw/
 └── trance/...
 ```
 
-Flujo de datos (capa `data/`):
+Flujo de datos ordenado (CLI, corre igual local o en Colab):
 
-```python
-from edm_classifier.data.manifest import build_manifest, save_manifest
-from edm_classifier.data.validate import validate_manifest
-
-entries = build_manifest("classifier/data/raw")     # etiqueta + metadata (WBS 2.4)
-save_manifest(entries, "classifier/data/manifest.csv")
-print(validate_manifest(entries).summary())          # 100/clase, >=128 kbps (WBS 2.3)
+```bash
+# 1. Etiquetado + metadata → manifiesto (WBS 2.4)
+uv run edm-classifier manifest --root data/raw --out data/manifest.csv
+# 2. Validación: 100/clase, >=128 kbps, formatos, doble fuente (WBS 2.3)
+uv run edm-classifier validate --manifest data/manifest.csv
+# 3. Split train/val/test 70/15/15 por track, persistido (WBS 4.3 / Req 3.4)
+uv run edm-classifier split --manifest data/manifest.csv --out data/splits.json
+# 4. Preprocesamiento: caché de mel-spectrogramas a disco, una sola vez (WBS 4.3)
+uv run edm-classifier preprocess --manifest data/manifest.csv --cache data/cache
 ```
 
-Segmentación: ventanas de **4 s** con 50% de solapamiento, recortando ~15 s de
-intro/outro (configurable en `config.py`, tuneable en WBS 4.5).
+El caché (`segments.npy` float16 + `labels`/`track_ids` + `index.json`) es la
+entrada del training; el audio crudo no se vuelve a leer. Segmentación: ventanas
+de **4 s** con 50% de solapamiento, recortando ~15 s de intro/outro (configurable
+en `config.py`, tuneable en WBS 4.5).
+
+### Entrenar en la nube (Colab)
+
+`colab/edm_classifier_colab.ipynb` es un launcher: clona el repo, instala el
+paquete, monta Drive y corre el mismo flujo sobre GPU. El audio crudo se queda en
+Drive; solo se preprocesa una vez y el caché (~1 GB) se guarda en Drive.
 
 ## Tests
 

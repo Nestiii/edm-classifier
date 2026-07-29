@@ -11,7 +11,7 @@ from edm_classifier.data.dataset import (
     class_distribution,
     index_directory,
 )
-from edm_classifier.data.splits import stratified_split
+from edm_classifier.data.splits import load_split, save_split, stratified_split
 
 
 def test_index_directory_finds_labeled_tracks(dataset_dir: Path):
@@ -100,3 +100,16 @@ def test_stratified_split_rejects_bad_ratios():
 def test_stratified_split_rejects_empty():
     with pytest.raises(ValueError):
         stratified_split([])
+
+
+def test_split_persistence_roundtrip(tmp_path: Path):
+    records = _make_records()
+    split = stratified_split(records, seed=3)
+    out = tmp_path / "splits.json"
+    save_split(split, out, seed=3)
+    assert out.exists()
+
+    loaded = load_split(out)
+    assert loaded.sizes() == split.sizes()
+    assert [str(r.path) for r in loaded.train] == [str(r.path) for r in split.train]
+    assert loaded.train[0].label == split.train[0].label

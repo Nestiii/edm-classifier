@@ -70,3 +70,19 @@ def dataset_dir(tmp_path: Path) -> Path:
     (root / "not_a_genre").mkdir()
     (root / SUBGENRE_DIRNAMES["deep house"] / "cover.txt").write_text("art")  # unsupported
     return root
+
+
+@pytest.fixture
+def split_dataset_dir(tmp_path: Path) -> Path:
+    """A dataset with enough tracks/class for a stratified 70/15/15 split."""
+    from edm_classifier.config import SUBGENRE_DIRNAMES
+
+    root = tmp_path / "dataset_split"
+    dirnames = [SUBGENRE_DIRNAMES["deep house"], SUBGENRE_DIRNAMES["trance"]]
+    for i, dirname in enumerate(dirnames):
+        genre_dir = root / dirname
+        genre_dir.mkdir(parents=True)
+        for j in range(8):
+            freq = 110.0 * (i + 1) + j
+            sf.write(genre_dir / f"track_{j}.wav", _sine(3.0, freq), SR, subtype="PCM_16")
+    return root

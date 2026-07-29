@@ -8,12 +8,21 @@ training, while remembering which segments belong to which track.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 import torch
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, Subset
 
 from edm_classifier.config import AudioConfig, FeatureConfig, settings
 from edm_classifier.data.dataset import TrackRecord
+from edm_classifier.data.preprocess import (
+    LABELS_FILE,
+    SEGMENTS_FILE,
+    TRACK_IDS_FILE,
+    load_cache_index,
+)
+from edm_classifier.data.splits import DataSplit
 from edm_classifier.features.pipeline import track_to_model_input
 
 
@@ -44,6 +53,59 @@ class TrackSegmentDataset(Dataset):
         x = torch.from_numpy(np.ascontiguousarray(segments)).float()
         y = torch.tensor(record.label, dtype=torch.long)
         return x, y
+
+
+class CachedSegmentDataset(Dataset):
+    """Segment-level dataset backed by a precomputed feature cache.
+
+    Item ``i`` returns:
+        segment: float tensor ``(1, n_mels, n_frames)``
+        label: long scalar tensor
+
+    Segments are memory-mapped, so random access is cheap and the whole array is
+    never forced into RAM at once. ``track_ids`` lets a split select segments by
+    source track and lets inference aggregate predictions per track.
+    """
+
+    def __init__(self, cache_dir: str | Path) -> None:
+        self.cache_dir = Path(cache_dir)
+        self.segments = np.load(self.cache_dir / SEGMENTS_FILE, mmap_mode="r")
+        self.labels = np.load(self.cache_dir / LABELS_FILE)
+        self.track_ids = np.load(self.cache_dir / TRACK_IDS_FILE)
+        self.index = load_cache_index(self.cache_dir)
+        # Map each track's absolute path to its stable track id.
+        self._path_to_track_id = {
+            str(t["path"]): int(t["track_id"]) for t in self.index["tracks"]
+        }
+
+    def __len__(self) -> int:
+        return int(self.segments.shape[0])
+
+    def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
+        segment = np.asarray(self.segments[idx], dtype=np.float32)
+        x = torch.from_numpy(segment)
+        y = torch.tensor(int(self.labels[idx]), dtype=torch.long)
+        return x, y
+
+    def segment_indices_for_paths(self, paths: list[str | Path]) -> list[int]:
+        """Return segment indices whose source track is in ``paths``."""
+        wanted = {self._path_to_track_id[str(p)] for p in paths if str(p) in self._path_to_track_id}
+        return [i for i, tid in enumerate(self.track_ids) if int(tid) in wanted]
+
+
+def build_split_subsets(
+    cache_dir: str | Path, split: DataSplit
+) -> tuple[Subset, Subset, Subset]:
+    """Build train/val/test segment-level subsets from a track-level split.
+
+    Because the split is by track, no segment of the same track appears in more
+    than one partition.
+    """
+    dataset = CachedSegmentDataset(cache_dir)
+    train = Subset(dataset, dataset.segment_indices_for_paths([r.path for r in split.train]))
+    val = Subset(dataset, dataset.segment_indices_for_paths([r.path for r in split.val]))
+    test = Subset(dataset, dataset.segment_indices_for_paths([r.path for r in split.test]))
+    return train, val, test
 
 
 def collate_segments(

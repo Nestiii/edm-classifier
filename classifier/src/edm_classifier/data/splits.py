@@ -9,7 +9,9 @@ class balance (Req 3.4) is preserved in every partition.
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
+from pathlib import Path
 
 from sklearn.model_selection import train_test_split
 
@@ -27,6 +29,44 @@ class DataSplit:
 
     def sizes(self) -> dict[str, int]:
         return {"train": len(self.train), "val": len(self.val), "test": len(self.test)}
+
+
+def _record_to_dict(r: TrackRecord) -> dict[str, object]:
+    return {"path": str(r.path), "subgenre": r.subgenre, "label": r.label}
+
+
+def _record_from_dict(d: dict[str, object]) -> TrackRecord:
+    return TrackRecord(
+        path=Path(str(d["path"])),
+        subgenre=str(d["subgenre"]),
+        label=int(d["label"]),
+    )
+
+
+def save_split(split: DataSplit, path: str | Path, seed: int | None = None) -> None:
+    """Persist a split to JSON so train/val/test stay fixed across runs."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "seed": seed if seed is not None else settings.dataset.seed,
+        "train": [_record_to_dict(r) for r in split.train],
+        "val": [_record_to_dict(r) for r in split.val],
+        "test": [_record_to_dict(r) for r in split.test],
+    }
+    path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+def load_split(path: str | Path) -> DataSplit:
+    """Load a persisted split from JSON."""
+    path = Path(path)
+    if not path.exists():
+        raise FileNotFoundError(f"Split file not found: {path}")
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    return DataSplit(
+        train=[_record_from_dict(d) for d in payload["train"]],
+        val=[_record_from_dict(d) for d in payload["val"]],
+        test=[_record_from_dict(d) for d in payload["test"]],
+    )
 
 
 def stratified_split(
