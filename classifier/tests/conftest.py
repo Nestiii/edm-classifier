@@ -44,3 +44,23 @@ def aiff_file(tmp_path: Path) -> Path:
     path = tmp_path / "track.aiff"
     sf.write(path, _sine(3.0), SR, format="AIFF", subtype="PCM_16")
     return path
+
+
+@pytest.fixture
+def dataset_dir(tmp_path: Path) -> Path:
+    """A small on-disk dataset: 2 subgenres, 4 tracks each, plus noise dirs."""
+    from edm_classifier.config import SUBGENRE_DIRNAMES
+
+    root = tmp_path / "dataset"
+    dirnames = [SUBGENRE_DIRNAMES["deep house"], SUBGENRE_DIRNAMES["trance"]]
+    for i, dirname in enumerate(dirnames):
+        genre_dir = root / dirname
+        genre_dir.mkdir(parents=True)
+        for j in range(4):
+            freq = 110.0 * (i + 1) + j
+            sf.write(genre_dir / f"track_{j}.wav", _sine(3.0, freq), SR, subtype="PCM_16")
+
+    # Directories/files that must be ignored by the indexer.
+    (root / "not_a_genre").mkdir()
+    (root / SUBGENRE_DIRNAMES["deep house"] / "cover.txt").write_text("art")  # unsupported
+    return root

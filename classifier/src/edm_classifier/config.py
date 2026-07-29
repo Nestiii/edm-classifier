@@ -25,8 +25,38 @@ SUBGENRES: tuple[str, ...] = (
 
 NUM_CLASSES: int = len(SUBGENRES)
 
+# Filesystem-safe directory name for each subgenre. Datasets are laid out as
+# ``<root>/<dirname>/*.wav`` and the desktop app organizes output the same way,
+# so slashes/spaces in labels map to a single canonical folder name.
+SUBGENRE_DIRNAMES: dict[str, str] = {
+    "deep house": "deep_house",
+    "tech house": "tech_house",
+    "melodic techno": "melodic_techno",
+    "progressive": "progressive",
+    "techno peak time": "techno_peak_time",
+    "hard techno": "hard_techno",
+    "minimal/deep tech": "minimal_deep_tech",
+    "trance": "trance",
+}
+
+# Reverse lookup: directory name -> canonical subgenre label.
+DIRNAME_TO_SUBGENRE: dict[str, str] = {v: k for k, v in SUBGENRE_DIRNAMES.items()}
+
+# Integer class id for each subgenre (index in SUBGENRES).
+SUBGENRE_TO_INDEX: dict[str, int] = {name: i for i, name in enumerate(SUBGENRES)}
+
 # File extensions the system is required to support (MP3, AIFF, WAV).
 SUPPORTED_EXTENSIONS: tuple[str, ...] = (".mp3", ".aiff", ".aif", ".wav")
+
+
+def dirname_for(subgenre: str) -> str:
+    """Return the filesystem-safe directory name for a subgenre label."""
+    return SUBGENRE_DIRNAMES[subgenre]
+
+
+def subgenre_for_dirname(dirname: str) -> str:
+    """Return the canonical subgenre label for a directory name."""
+    return DIRNAME_TO_SUBGENRE[dirname]
 
 
 class AudioConfig(BaseSettings):
