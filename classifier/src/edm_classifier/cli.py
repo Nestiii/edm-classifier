@@ -71,6 +71,22 @@ def _cmd_preprocess(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_train(args: argparse.Namespace) -> int:
+    import json
+
+    from edm_classifier.training.train import TrainConfig, train_model
+
+    config = TrainConfig(
+        epochs=args.epochs,
+        batch_size=args.batch_size,
+        learning_rate=args.lr,
+        n_channels=args.n_channels,
+    )
+    report = train_model(args.cache, args.splits, args.out, config=config, device=args.device)
+    print(json.dumps(report, indent=2))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="edm-classifier",
@@ -108,6 +124,17 @@ def build_parser() -> argparse.ArgumentParser:
     p_pre.add_argument("--manifest", required=True, help="Manifest CSV path.")
     p_pre.add_argument("--cache", required=True, help="Output cache directory.")
     p_pre.set_defaults(func=_cmd_preprocess)
+
+    p_train = sub.add_parser("train", help="Train the model from the feature cache.")
+    p_train.add_argument("--cache", required=True, help="Feature cache directory.")
+    p_train.add_argument("--splits", required=True, help="Persisted splits.json path.")
+    p_train.add_argument("--out", required=True, help="Output directory for checkpoint + report.")
+    p_train.add_argument("--epochs", type=int, default=50)
+    p_train.add_argument("--batch-size", type=int, default=32)
+    p_train.add_argument("--lr", type=float, default=1e-3)
+    p_train.add_argument("--n-channels", type=int, default=128)
+    p_train.add_argument("--device", default="auto", help="auto|cuda|mps|cpu")
+    p_train.set_defaults(func=_cmd_train)
 
     return parser
 

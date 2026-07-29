@@ -47,6 +47,8 @@ source = ["edm_classifier"]
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+# Colab launcher notebooks are glue, not package code.
+extend-exclude = ["colab"]
 
 [tool.ruff.lint]
 # PEP 8 (E/W), pyflakes (F), imports (I), naming (N), bugbear (B), pyupgrade (UP)
