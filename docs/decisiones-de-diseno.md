@@ -225,18 +225,27 @@ alternativas se evaluaron y dónde quedó implementado.
 
 ### 8.1 Bucle de entrenamiento
 - **Decisión:** `train_model` lee el caché + split persistido, entrena con
-  validación por época, **early stopping** (patience) sobre val loss, guarda el
-  **mejor checkpoint** y evalúa el test a **dos niveles**: por segmento y por track
+  validación por época, **early stopping** (patience) y **selección del mejor
+  checkpoint**, y evalúa el test a **dos niveles**: por segmento y por track
   agregado. Logging por época en vivo.
 - **Contexto:** device-agnostic; reproducible (semilla fija).
 
-### 8.2 Data augmentation: SpecAugment
+### 8.2 Métrica monitoreada: val accuracy (no val loss)
+- **Decisión:** el checkpoint y el early stopping se guían por **val accuracy**
+  (la métrica objetivo), configurable a val loss (`TrainConfig.monitor`).
+- **Contexto:** con pocos tracks de train, la val loss puede **subir por
+  *overconfidence*** (el modelo se equivoca con alta confianza) mientras la val
+  accuracy sigue mejorando. Monitorear la loss guardaba un checkpoint
+  sub-entrenado (el de la primera época). Monitorear accuracy guarda el modelo que
+  realmente mejor clasifica.
+
+### 8.3 Data augmentation: SpecAugment
 - **Decisión:** máscaras aleatorias de frecuencia y de tiempo sobre el
   mel-spectrograma durante el entrenamiento.
 - **Contexto:** el plan pide *data augmentation*; con 560 tracks de train ayuda
   contra el overfitting.
 
-### 8.3 Optimizaciones de velocidad
+### 8.4 Optimizaciones de velocidad
 - **Decisión:** **mixed precision (AMP)** con `GradScaler` (solo CUDA),
   `cudnn.benchmark`, `pin_memory` + `non_blocking`, y `persistent_workers` en los
   DataLoaders.
@@ -244,6 +253,29 @@ alternativas se evaluaron y dónde quedó implementado.
   (tensor cores fp16) da ~1.5-2×. Se sube el batch a 128 y `num_workers` a 4.
   Opción extra: `n_channels=64` (~4× menos cómputo, poca pérdida de accuracy) para
   iterar rápido.
+
+### 8.5 Overfitting observado y estrategia de tuning (WBS 4.5)
+- **Observación:** overfitting fuerte y temprano — el `train_loss` se desploma
+  (a ~0.16-0.22 en pocas épocas) mientras el **val accuracy por segmento se
+  estanca en ~0.64** y el `val_loss` sube. La brecha train/val aparece desde la
+  primera época.
+- **Causa:** aunque hay ~147k segmentos, provienen de solo **560 tracks de train**
+  (70/género) y los segmentos de un mismo track están muy correlacionados → el
+  tamaño de muestra efectivo es ~560, y un ResNet tiene capacidad de sobra para
+  memorizarlos. Además, varios subgéneros se solapan (familia techno).
+- **Palancas de regularización probadas:** reducir capacidad (`n_channels`
+  128→64), subir `weight_decay` (1e-4→1e-3), SpecAugment más agresivo (máscaras de
+  frecuencia/tiempo mayores). El plateau ~0.64 **persiste entre configuraciones
+  muy distintas**, lo que sugiere un techo de **datos/etiquetas**, no de capacidad
+  del modelo.
+- **Distinción metodológica clave:** el `val_acc` por segmento **no** es la
+  métrica entregable. El entregable es la accuracy **por track (agregada)**
+  —promedio del softmax de los segmentos—, que suele ser varios puntos mayor. Y el
+  objetivo secundario del plan (top-2 > 90%) es donde el error de pares de
+  subgéneros vecinos se recupera.
+- **Próxima palanca (si track-level + top-2 se quedan cortos):** arquitectura
+  multi-rama con tempograma (ver §7.1) y/o *transfer learning* (contingencia del
+  plan, Riesgo 3).
 
 ---
 
