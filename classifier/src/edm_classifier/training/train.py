@@ -51,6 +51,7 @@ class TrainConfig:
     time_mask: int = 16
     seed: int = 42
     verbose: bool = True  # print a line per epoch during training
+    use_amp: bool = True  # mixed precision (only effective on CUDA)
 
 
 def spec_augment(x: torch.Tensor, cfg: TrainConfig) -> torch.Tensor:
@@ -77,12 +78,14 @@ def _gather_probs(
 ) -> tuple[np.ndarray, np.ndarray]:
     """Run the model over a loader; return (probs, labels) in loader order."""
     model.eval()
+    on_cuda = device.type == "cuda"
     probs_chunks: list[np.ndarray] = []
     label_chunks: list[np.ndarray] = []
     for x, y in loader:
-        x = x.to(device)
-        logits = model(x)
-        probs_chunks.append(torch.softmax(logits, dim=1).cpu().numpy())
+        x = x.to(device, non_blocking=on_cuda)
+        with torch.autocast(device_type=device.type, enabled=on_cuda):
+            logits = model(x)
+        probs_chunks.append(torch.softmax(logits.float(), dim=1).cpu().numpy())
         label_chunks.append(y.numpy())
     return np.concatenate(probs_chunks), np.concatenate(label_chunks)
 
@@ -117,6 +120,11 @@ def train_model(
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
+    on_cuda = dev.type == "cuda"
+    use_amp = config.use_amp and on_cuda
+    if on_cuda:
+        torch.backends.cudnn.benchmark = True  # autotune conv kernels for fixed shapes
+
     split = load_split(splits_path)
     train_set, val_set, test_set = build_split_subsets(cache_dir, split)
     dataset: CachedSegmentDataset = train_set.dataset  # shared underlying cache
@@ -127,15 +135,24 @@ def train_model(
         shuffle=True,
         drop_last=True,  # keeps BatchNorm happy (no size-1 batches)
         num_workers=config.num_workers,
+        pin_memory=on_cuda,
+        persistent_workers=config.num_workers > 0,
     )
-    val_loader = DataLoader(val_set, batch_size=config.batch_size, num_workers=config.num_workers)
-    test_loader = DataLoader(test_set, batch_size=config.batch_size, num_workers=config.num_workers)
+    loader_kwargs = {
+        "batch_size": config.batch_size,
+        "num_workers": config.num_workers,
+        "pin_memory": on_cuda,
+        "persistent_workers": config.num_workers > 0,
+    }
+    val_loader = DataLoader(val_set, **loader_kwargs)
+    test_loader = DataLoader(test_set, **loader_kwargs)
 
     model = build_model(n_channels=config.n_channels, dropout=config.dropout).to(dev)
     optimizer = torch.optim.Adam(
         model.parameters(), lr=config.learning_rate, weight_decay=config.weight_decay
     )
     criterion = nn.CrossEntropyLoss()
+    scaler = torch.amp.GradScaler("cuda", enabled=use_amp)
 
     best_val_loss = float("inf")
     best_state: dict | None = None
@@ -147,13 +164,15 @@ def train_model(
         running_loss = 0.0
         n_batches = 0
         for x, y in train_loader:
-            x, y = x.to(dev), y.to(dev)
+            x, y = x.to(dev, non_blocking=on_cuda), y.to(dev, non_blocking=on_cuda)
             if config.use_spec_augment:
                 x = spec_augment(x, config)
             optimizer.zero_grad()
-            loss = criterion(model(x), y)
-            loss.backward()
-            optimizer.step()
+            with torch.autocast(device_type=dev.type, enabled=use_amp):
+                loss = criterion(model(x), y)
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
             running_loss += float(loss.item())
             n_batches += 1
 
