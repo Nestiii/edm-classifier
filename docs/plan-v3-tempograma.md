@@ -4,6 +4,26 @@ Plan del próximo experimento de modelo (v3), orientado a superar el techo de v1
 —dominado por la confusión de **progressive** con el cluster melódico-house
 (deep house / melodic techno)—.
 
+> **Estado: implementado y testeado** (falta correr la experimentación real).
+> Código: `features/multifeature.py`, `data/preprocess_v3.py`,
+> `models/fusion.py`, `data/torch_dataset.py::CachedMultiFeatureDataset`,
+> `training/train_v3.py`.
+>
+> **Tamaño del caché v3: ~36 GB** (mel 6.5 + fourier 10 + autocorr 20). Requiere
+> espacio en Drive **y** en `/content` de Colab. Opción pendiente para reducirlo a
+> ~16 GB: pooling del eje BPM de los tempogramas.
+
+## Cómo correr (checklist en Colab)
+
+1. Celda 1 (pull + install) → **Restart session** → Celda 2 (rutas).
+2. Preprocess v3 → genera `cache_v3` en Drive (tarda más que v2: 2 tempogramas
+   por track). Verificar `result.total_gb()`.
+3. Copiar `cache_v3` a `/content/cache_v3` (verificar tamaño completo).
+4. Entrenar con `train_fusion_model(LOCAL_V3, SPLITS, run_v3, ...)` — **reusa el
+   mismo `SPLITS`** que v1/v2 → comparación apples-to-apples.
+5. Comparar `run_v3/report.json` (`test_track`) contra v2 (0.80 / 0.917 top-2) y
+   mirar el F1 de progressive + la matriz de confusión.
+
 ## Motivación y respaldo bibliográfico
 
 El baseline (solo mel-spectrograma) separa bien los subgéneros de timbre distinto
