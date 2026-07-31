@@ -50,6 +50,7 @@ class TrainConfig:
     freq_mask: int = 16
     time_mask: int = 16
     seed: int = 42
+    verbose: bool = True  # print a line per epoch during training
 
 
 def spec_augment(x: torch.Tensor, cfg: TrainConfig) -> torch.Tensor:
@@ -176,14 +177,27 @@ def train_model(
             }
         )
 
-        if val_loss < best_val_loss - 1e-4:
+        improved = val_loss < best_val_loss - 1e-4
+        if improved:
             best_val_loss = val_loss
             best_state = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
             epochs_without_improvement = 0
         else:
             epochs_without_improvement += 1
-            if epochs_without_improvement >= config.patience:
-                break
+
+        if config.verbose:
+            marker = "  <- best" if improved else ""
+            print(
+                f"[epoch {epoch + 1:>3}/{config.epochs}] "
+                f"train_loss={train_loss:.4f} val_loss={val_loss:.4f} "
+                f"val_acc={val_acc:.3f}{marker}",
+                flush=True,
+            )
+
+        if not improved and epochs_without_improvement >= config.patience:
+            if config.verbose:
+                print(f"Early stopping at epoch {epoch + 1} (no val improvement).", flush=True)
+            break
 
     if best_state is not None:
         model.load_state_dict(best_state)
