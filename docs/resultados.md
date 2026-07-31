@@ -84,3 +84,44 @@ Orden: 0 deep house · 1 tech house · 2 melodic techno · 3 progressive ·
 ### Artefactos
 - Checkpoint del mejor modelo: `run/model.pt` (incluye `model_kwargs` + `config`).
 - Reporte completo: `run/report.json` (history + métricas + matriz de confusión).
+
+---
+
+## v2 — + label smoothing + cosine LR (campeón actual)
+
+**Fecha:** 2026-07-31. Misma config que el baseline v1 más:
+`label_smoothing=0.1`, `scheduler='cosine'`, `epochs=80`, `patience=15`.
+Mismo caché (sin re-preprocesar). Early stopping en época 56; mejor val_acc 0.705
+(época 41).
+
+### Métricas (test set, track-level)
+
+| Modelo | Accuracy | Top-2 | Macro F1 | train_loss final |
+|---|---|---|---|---|
+| Baseline v1 | 0.800 | 0.900 | 0.799 | ~0.09 (overfit) |
+| **v2** | **0.800** | **0.917** | 0.797 | ~0.50 (sano) |
+
+- **Top-1 empatado** (96/120), **top-2 mejor** (110/120 vs 108/120).
+- **Entrenamiento mucho más sano:** el label smoothing evitó el colapso del
+  train_loss → modelo menos overfitteado y mejor calibrado (más robusto).
+
+### F1 por subgénero (v2)
+
+| Subgénero | v1 | v2 |
+|---|---|---|
+| tech house | 0.93 | **0.97** |
+| minimal/deep tech | 0.93 | **0.97** |
+| techno peak time | 0.875 | **0.94** |
+| hard techno | 0.90 | 0.90 |
+| trance | 0.83 | 0.81 |
+| melodic techno | 0.75 | 0.75 |
+| deep house | 0.75 | 0.69 |
+| **progressive** | 0.43 | **0.36** |
+
+### Conclusión
+v2 mejora los subgéneros distintos y el top-2, con un entrenamiento más sano,
+pero **no resuelve el cuello de botella de progressive** (confusión estructural
+con deep house / melodic techno). Se adopta v2 como campeón por el mejor top-2 y
+la mejor calibración. Para superar el techo de top-1 haría falta una palanca de
+mayor contexto temporal (tempograma / segmentos más largos), que requiere
+re-preprocesar.
