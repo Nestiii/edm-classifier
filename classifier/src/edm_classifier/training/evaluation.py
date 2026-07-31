@@ -69,6 +69,25 @@ class EvaluationResult:
             "n_samples": self.n_samples,
         }
 
+    def to_dict(self) -> dict:
+        """Full serializable metrics, including per-class F1 and confusion matrix."""
+        return {
+            **self.summary(),
+            "per_class_f1": {k: round(v, 4) for k, v in self.per_class_f1.items()},
+            "confusion_matrix": self.confusion_matrix.tolist(),
+        }
+
+    def format_confusion(self) -> str:
+        """Readable confusion matrix (rows = true, cols = predicted)."""
+        labels = list(self.per_class_f1.keys())
+        width = max(len(x) for x in labels)
+        header = " " * (width + 2) + " ".join(f"{i:>4}" for i in range(len(labels)))
+        lines = ["Confusion matrix (rows=true, cols=pred):", header]
+        for i, name in enumerate(labels):
+            row = " ".join(f"{v:>4}" for v in self.confusion_matrix[i])
+            lines.append(f"{name:>{width}} {i:>1}  {row}")
+        return "\n".join(lines)
+
 
 def evaluate(
     y_true: np.ndarray,

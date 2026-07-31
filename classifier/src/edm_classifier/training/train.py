@@ -17,6 +17,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, Subset
 
+from edm_classifier import SUBGENRES
 from edm_classifier.data.splits import load_split
 from edm_classifier.data.torch_dataset import CachedSegmentDataset, build_split_subsets
 from edm_classifier.models.short_chunk_cnn import build_model
@@ -243,9 +244,51 @@ def train_model(
     report = {
         "history": history,
         "epochs_trained": len(history),
+        "subgenres": list(SUBGENRES),
         "test_segment": segment_result.summary(),
-        "test_track": track_result.summary(),
+        "test_track": track_result.to_dict(),
         "meets_targets": track_result.meets_targets(),
     }
     (out_dir / "report.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
+    if config.verbose:
+        print(track_result.format_confusion(), flush=True)
     return report
+
+
+def evaluate_checkpoint(
+    cache_dir: str | Path,
+    splits_path: str | Path,
+    checkpoint_path: str | Path,
+    partition: str = "test",
+    device: str = "auto",
+) -> dict:
+    """Evaluate a saved checkpoint on a partition without retraining.
+
+    Returns segment- and track-level metrics (including the confusion matrix and
+    per-class F1) for the chosen partition ("train" | "val" | "test").
+    """
+    dev = select_device(device)
+    ckpt = torch.load(checkpoint_path, map_location="cpu")
+    model_kwargs = ckpt.get("model_kwargs", {}) if isinstance(ckpt, dict) else {}
+    state = ckpt["model"] if isinstance(ckpt, dict) and "model" in ckpt else ckpt
+    model = build_model(**model_kwargs).to(dev)
+    model.load_state_dict(state)
+
+    split = load_split(splits_path)
+    names = ("train", "val", "test")
+    subsets = dict(zip(names, build_split_subsets(cache_dir, split), strict=True))
+    subset = subsets[partition]
+    dataset: CachedSegmentDataset = subset.dataset
+
+    loader = DataLoader(subset, batch_size=128, num_workers=0, pin_memory=dev.type == "cuda")
+    probs, labels = _gather_probs(model, loader, dev)
+    segment_result = evaluate(labels, probs)
+    track_result = _track_level_result(dataset, subset, probs)
+
+    return {
+        "partition": partition,
+        "subgenres": list(SUBGENRES),
+        "segment": segment_result.to_dict(),
+        "track": track_result.to_dict(),
+        "meets_targets": track_result.meets_targets(),
+    }

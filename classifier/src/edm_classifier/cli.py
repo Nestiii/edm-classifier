@@ -87,6 +87,18 @@ def _cmd_train(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_evaluate(args: argparse.Namespace) -> int:
+    import json
+
+    from edm_classifier.training.train import evaluate_checkpoint
+
+    result = evaluate_checkpoint(
+        args.cache, args.splits, args.checkpoint, partition=args.partition, device=args.device
+    )
+    print(json.dumps(result, indent=2))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="edm-classifier",
@@ -135,6 +147,14 @@ def build_parser() -> argparse.ArgumentParser:
     p_train.add_argument("--n-channels", type=int, default=128)
     p_train.add_argument("--device", default="auto", help="auto|cuda|mps|cpu")
     p_train.set_defaults(func=_cmd_train)
+
+    p_eval = sub.add_parser("evaluate", help="Evaluate a saved checkpoint (no retraining).")
+    p_eval.add_argument("--cache", required=True, help="Feature cache directory.")
+    p_eval.add_argument("--splits", required=True, help="Persisted splits.json path.")
+    p_eval.add_argument("--checkpoint", required=True, help="Path to model.pt.")
+    p_eval.add_argument("--partition", default="test", choices=["train", "val", "test"])
+    p_eval.add_argument("--device", default="auto", help="auto|cuda|mps|cpu")
+    p_eval.set_defaults(func=_cmd_evaluate)
 
     return parser
 
