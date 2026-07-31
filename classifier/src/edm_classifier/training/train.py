@@ -42,7 +42,8 @@ class TrainConfig:
     batch_size: int = 32
     learning_rate: float = 1e-3
     weight_decay: float = 1e-4
-    patience: int = 8  # early-stopping patience on val loss
+    patience: int = 8  # early-stopping patience
+    monitor: str = "val_acc"  # metric for checkpoint/early-stop: "val_acc" | "val_loss"
     num_workers: int = 0
     n_channels: int = 128
     dropout: float = 0.5
@@ -154,7 +155,12 @@ def train_model(
     criterion = nn.CrossEntropyLoss()
     scaler = torch.amp.GradScaler("cuda", enabled=use_amp)
 
-    best_val_loss = float("inf")
+    # Checkpoint / early-stop on the monitored metric. Default is val accuracy
+    # (the target metric): with small track counts, val loss can rise from
+    # overconfidence while accuracy still improves, so monitoring loss would save
+    # an under-trained checkpoint.
+    monitor_acc = config.monitor == "val_acc"
+    best_metric = -float("inf") if monitor_acc else float("inf")
     best_state: dict | None = None
     epochs_without_improvement = 0
     history: list[dict] = []
@@ -196,9 +202,10 @@ def train_model(
             }
         )
 
-        improved = val_loss < best_val_loss - 1e-4
+        current = val_acc if monitor_acc else val_loss
+        improved = (current > best_metric + 1e-4) if monitor_acc else (current < best_metric - 1e-4)
         if improved:
-            best_val_loss = val_loss
+            best_metric = current
             best_state = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
             epochs_without_improvement = 0
         else:
