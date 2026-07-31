@@ -54,6 +54,8 @@ class TrainConfig:
     seed: int = 42
     verbose: bool = True  # print a line per epoch during training
     use_amp: bool = True  # mixed precision (only effective on CUDA)
+    label_smoothing: float = 0.0  # softens targets; curbs overconfidence
+    scheduler: str = "none"  # LR schedule: "none" | "cosine"
 
 
 def spec_augment(x: torch.Tensor, cfg: TrainConfig) -> torch.Tensor:
@@ -153,8 +155,13 @@ def train_model(
     optimizer = torch.optim.Adam(
         model.parameters(), lr=config.learning_rate, weight_decay=config.weight_decay
     )
-    criterion = nn.CrossEntropyLoss()
+    criterion = nn.CrossEntropyLoss(label_smoothing=config.label_smoothing)
     scaler = torch.amp.GradScaler("cuda", enabled=use_amp)
+    lr_scheduler = (
+        torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=config.epochs)
+        if config.scheduler == "cosine"
+        else None
+    )
 
     # Checkpoint / early-stop on the monitored metric. Default is val accuracy
     # (the target metric): with small track counts, val loss can rise from
@@ -220,6 +227,9 @@ def train_model(
                 f"val_acc={val_acc:.3f}{marker}",
                 flush=True,
             )
+
+        if lr_scheduler is not None:
+            lr_scheduler.step()
 
         if not improved and epochs_without_improvement >= config.patience:
             if config.verbose:

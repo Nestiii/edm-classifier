@@ -36,6 +36,8 @@ def test_train_end_to_end(split_dataset_dir: Path, tmp_path: Path):
         n_channels=8,  # tiny model for speed
         num_workers=0,
         use_spec_augment=True,
+        label_smoothing=0.1,
+        scheduler="cosine",
     )
     report = train_model(cache, splits, out, config=config, device="cpu")
 
