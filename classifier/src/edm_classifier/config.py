@@ -45,7 +45,7 @@ DIRNAME_TO_SUBGENRE: dict[str, str] = {v: k for k, v in SUBGENRE_DIRNAMES.items(
 # Alternate on-disk folder names accepted by the indexer, mapped to their
 # canonical subgenre. Lets a dataset whose folders differ from the canonical
 # dirnames work without renaming (e.g. the legacy "minimal" folder from the
-# earlier "songo" dataset stands for "minimal/deep tech").
+# earlier experiments' dataset stands for "minimal/deep tech").
 SUBGENRE_DIRNAME_ALIASES: dict[str, str] = {
     "minimal": "minimal/deep tech",
 }

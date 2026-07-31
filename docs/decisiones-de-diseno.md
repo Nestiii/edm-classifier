@@ -43,11 +43,11 @@ alternativas se evaluaron y dónde quedó implementado.
 
 ---
 
-## 2. Reutilización de la experimentación previa ("songo")
+## 2. Reutilización de las experimentaciones previas
 
 ### 2.1 No reutilizar el código legacy, sí los conceptos
-- **Decisión:** los 8 notebooks en `docs/experiments/` (proyecto Colab previo
-  "songo") se conservan como referencia histórica, pero el proyecto se
+- **Decisión:** los 8 notebooks en `docs/experiments/` (de experimentaciones
+  previas en Colab) se conservan como referencia histórica, pero el proyecto se
   **reescribe desde cero en PyTorch**. Se portan solo 4 conceptos, no código.
 - **Contexto:** análisis de los notebooks (2026-07-29). Están en el stack
   equivocado (TensorFlow/Keras + sklearn), sin conexiones residuales, con
@@ -72,7 +72,8 @@ alternativas se evaluaron y dónde quedó implementado.
 - **Decisión:** trabajar con el dataset real disponible: **100 tracks/género × 8
   = 800 tracks**.
 - **Desviación del plan:** el Req 3.1 fijaba 200/género (1600 total).
-- **Contexto:** el dataset ya existía del proyecto "songo" (en Google Drive). No
+- **Contexto:** el dataset ya existía de las experimentaciones previas (en Google
+  Drive). No
   es bloqueante: la segmentación multiplica los ejemplos de entrenamiento a
   decenas de miles. El split se mantiene a nivel track (70/15/15), quedando
   560/120/120 tracks.
@@ -201,7 +202,8 @@ alternativas se evaluaron y dónde quedó implementado.
   y cumplen el requisito como *capacidad del sistema*, pero alimentan los
   **baselines de sklearn**, no la CNN.
 - **Alternativa futura:** arquitectura multi-rama (fusión tardía) que combine el
-  mel con tempograma/features, como el `cnn_3` legacy tenía comentado. Se deja
+  mel con tempograma/features, como el `cnn_3` legacy tenía comentado y como
+  propone Hsu, Chen & Yang (2021), arXiv:2110.08862 (referencia del plan). Se deja
   como experimento de tuning solo si las métricas se quedan cortas.
 
 ### 7.2 Arquitectura: Short-chunk CNN + ResNet
