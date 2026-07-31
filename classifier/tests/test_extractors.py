@@ -36,6 +36,13 @@ def test_tempogram_shape(waveform: np.ndarray):
     assert out.shape[1] > 0
 
 
+def test_fourier_tempogram_shape(waveform: np.ndarray):
+    out = fx.fourier_tempogram(waveform)
+    assert out.ndim == 2
+    assert out.shape[0] == FEAT.tempogram_win_length // 2 + 1  # 193 for win 384
+    assert np.all(out >= 0.0)  # magnitude
+
+
 def test_spectral_centroid_shape(waveform: np.ndarray):
     out = fx.spectral_centroid(waveform)
     assert out.shape[0] == 1

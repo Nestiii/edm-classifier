@@ -124,6 +124,12 @@ class FeatureConfig(BaseSettings):
     # Chroma
     n_chroma: int = 12
 
+    # Tempogram (Fourier + autocorrelation) window, in frames. 384 matches the
+    # reference paper (Hsu et al. 2021, arXiv:2110.08862) and, at hop 512 /
+    # 22.05 kHz, spans ~8.9 s — hence tempograms are computed over the full
+    # track and sliced per segment, not per 4 s chunk.
+    tempogram_win_length: int = 384
+
 
 class DatasetConfig(BaseSettings):
     """Dataset construction and train/validation/test split parameters."""

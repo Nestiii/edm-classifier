@@ -83,9 +83,37 @@ def tempogram(
         y=waveform, sr=audio.sample_rate, hop_length=feat.hop_length
     )
     out = librosa.feature.tempogram(
-        onset_envelope=onset_env, sr=audio.sample_rate, hop_length=feat.hop_length
+        onset_envelope=onset_env,
+        sr=audio.sample_rate,
+        hop_length=feat.hop_length,
+        win_length=feat.tempogram_win_length,
     )
     return out.astype(np.float32, copy=False)
+
+
+def fourier_tempogram(
+    waveform: np.ndarray,
+    audio: AudioConfig | None = None,
+    feat: FeatureConfig | None = None,
+) -> np.ndarray:
+    """Compute a Fourier tempogram magnitude of shape ``(win_length//2 + 1, n_frames)``.
+
+    Complements the (autocorrelation) :func:`tempogram`: the Fourier variant maps
+    onset periodicity to a BPM axis emphasizing harmonics, and was the stronger of
+    the two tempo features in Hsu et al. 2021 (arXiv:2110.08862).
+    """
+    audio = audio or settings.audio
+    feat = feat or settings.features
+    onset_env = librosa.onset.onset_strength(
+        y=waveform, sr=audio.sample_rate, hop_length=feat.hop_length
+    )
+    out = librosa.feature.fourier_tempogram(
+        onset_envelope=onset_env,
+        sr=audio.sample_rate,
+        hop_length=feat.hop_length,
+        win_length=feat.tempogram_win_length,
+    )
+    return np.abs(out).astype(np.float32, copy=False)
 
 
 def spectral_centroid(
