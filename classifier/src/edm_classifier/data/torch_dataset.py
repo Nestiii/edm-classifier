@@ -123,6 +123,60 @@ def build_split_subsets(
     return train, val, test
 
 
+class CachedMultiFeatureDataset(Dataset):
+    """Segment-level dataset over a v3 cache (mel + Fourier/autocorr tempograms).
+
+    Item ``i`` returns ``(mel, fourier, autocorr, label)`` where each feature is a
+    float tensor ``(1, bins, n_frames)``. Features are memory-mapped.
+    """
+
+    def __init__(self, cache_dir: str | Path) -> None:
+        self.cache_dir = Path(cache_dir)
+        self.index = load_cache_index(self.cache_dir)
+        features = self.index["features"]
+        self.feature_names = list(features.keys())
+        self.features = {
+            name: np.memmap(
+                self.cache_dir / spec["file"],
+                dtype=SEGMENT_DTYPE,
+                mode="r",
+                shape=tuple(spec["shape"]),
+            )
+            for name, spec in features.items()
+        }
+        self.labels = np.load(self.cache_dir / LABELS_FILE)
+        self.track_ids = np.load(self.cache_dir / TRACK_IDS_FILE)
+        self._path_to_track_id = {
+            str(t["path"]): int(t["track_id"]) for t in self.index["tracks"]
+        }
+
+    def __len__(self) -> int:
+        return int(self.labels.shape[0])
+
+    def __getitem__(self, idx: int) -> tuple[torch.Tensor, ...]:
+        tensors = [
+            torch.from_numpy(np.asarray(self.features[name][idx], dtype=np.float32))
+            for name in ("mel", "fourier", "autocorr")
+        ]
+        label = torch.tensor(int(self.labels[idx]), dtype=torch.long)
+        return (*tensors, label)
+
+    def segment_indices_for_paths(self, paths: list[str | Path]) -> list[int]:
+        wanted = {self._path_to_track_id[str(p)] for p in paths if str(p) in self._path_to_track_id}
+        return [i for i, tid in enumerate(self.track_ids) if int(tid) in wanted]
+
+
+def build_multifeature_split_subsets(
+    cache_dir: str | Path, split: DataSplit
+) -> tuple[Subset, Subset, Subset]:
+    """Build train/val/test segment subsets from a v3 cache and a track split."""
+    dataset = CachedMultiFeatureDataset(cache_dir)
+    train = Subset(dataset, dataset.segment_indices_for_paths([r.path for r in split.train]))
+    val = Subset(dataset, dataset.segment_indices_for_paths([r.path for r in split.val]))
+    test = Subset(dataset, dataset.segment_indices_for_paths([r.path for r in split.test]))
+    return train, val, test
+
+
 def collate_segments(
     batch: list[tuple[torch.Tensor, torch.Tensor]],
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:

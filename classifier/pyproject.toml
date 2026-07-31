@@ -58,3 +58,5 @@ select = ["E", "W", "F", "I", "N", "B", "UP"]
 # `X` (uppercase) for feature matrices is the standard scikit-learn convention.
 "**/baselines.py" = ["N803", "N806"]
 "tests/**" = ["N803", "N806"]
+# `import torch.nn.functional as F` is the universal PyTorch convention.
+"**/models/*.py" = ["N812"]
