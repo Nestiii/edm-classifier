@@ -8,6 +8,7 @@ training, while remembering which segments belong to which track.
 
 from __future__ import annotations
 
+from collections import OrderedDict
 from pathlib import Path
 
 import numpy as np
@@ -124,38 +125,61 @@ def build_split_subsets(
 
 
 class CachedMultiFeatureDataset(Dataset):
-    """Segment-level dataset over a v3 cache (mel + Fourier/autocorr tempograms).
+    """Segment-level dataset over a v3 cache with one .npy file per track.
 
     Item ``i`` returns ``(mel, fourier, autocorr, label)`` where each feature is a
-    float tensor ``(1, bins, n_frames)``. Features are memory-mapped.
+    float tensor ``(1, bins, n_frames)``. Per-track files are memory-mapped on
+    demand and kept in a small LRU cache to bound open file descriptors.
     """
+
+    _MMAP_CACHE_TRACKS = 256
 
     def __init__(self, cache_dir: str | Path) -> None:
         self.cache_dir = Path(cache_dir)
         self.index = load_cache_index(self.cache_dir)
-        features = self.index["features"]
-        self.feature_names = list(features.keys())
-        self.features = {
-            name: np.memmap(
-                self.cache_dir / spec["file"],
-                dtype=SEGMENT_DTYPE,
-                mode="r",
-                shape=tuple(spec["shape"]),
-            )
-            for name, spec in features.items()
+        self.feature_dirs = {
+            name: spec["dir"] for name, spec in self.index["features"].items()
         }
         self.labels = np.load(self.cache_dir / LABELS_FILE)
         self.track_ids = np.load(self.cache_dir / TRACK_IDS_FILE)
+
+        # Segment index in track order: global segment i -> (track_id, local_idx).
+        self._seg_index: list[tuple[int, int]] = []
+        for track in self.index["tracks"]:
+            tid = int(track["track_id"])
+            self._seg_index.extend((tid, j) for j in range(int(track["n_segments"])))
+
         self._path_to_track_id = {
             str(t["path"]): int(t["track_id"]) for t in self.index["tracks"]
         }
+        # LRU cache of {track_id: {feature: memmap}} to limit open file handles.
+        self._mmap_cache: OrderedDict[int, dict[str, np.ndarray]] = OrderedDict()
 
     def __len__(self) -> int:
-        return int(self.labels.shape[0])
+        return len(self._seg_index)
+
+    def _track_arrays(self, track_id: int) -> dict[str, np.ndarray]:
+        cached = self._mmap_cache.get(track_id)
+        if cached is not None:
+            self._mmap_cache.move_to_end(track_id)
+            return cached
+        arrays = {
+            name: np.load(
+                self.cache_dir / self.feature_dirs[name] / f"track_{track_id:04d}.npy",
+                mmap_mode="r",
+            )
+            for name in ("mel", "fourier", "autocorr")
+        }
+        self._mmap_cache[track_id] = arrays
+        if len(self._mmap_cache) > self._MMAP_CACHE_TRACKS:
+            self._mmap_cache.popitem(last=False)
+        return arrays
 
     def __getitem__(self, idx: int) -> tuple[torch.Tensor, ...]:
+        track_id, local = self._seg_index[idx]
+        arrays = self._track_arrays(track_id)
         tensors = [
-            torch.from_numpy(np.asarray(self.features[name][idx], dtype=np.float32))
+            torch.from_numpy(np.asarray(arrays[name][local], dtype=np.float32))
             for name in ("mel", "fourier", "autocorr")
         ]
         label = torch.tensor(int(self.labels[idx]), dtype=torch.long)
@@ -163,7 +187,7 @@ class CachedMultiFeatureDataset(Dataset):
 
     def segment_indices_for_paths(self, paths: list[str | Path]) -> list[int]:
         wanted = {self._path_to_track_id[str(p)] for p in paths if str(p) in self._path_to_track_id}
-        return [i for i, tid in enumerate(self.track_ids) if int(tid) in wanted]
+        return [i for i, (tid, _) in enumerate(self._seg_index) if tid in wanted]
 
 
 def build_multifeature_split_subsets(

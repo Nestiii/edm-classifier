@@ -19,9 +19,12 @@ def test_preprocess_multifeature_cache(split_dataset_dir: Path, tmp_path: Path):
     cache = tmp_path / "cache_v3"
     result = preprocess_multifeature(records, cache)
 
-    assert (cache / "mel.f16").exists()
-    assert (cache / "fourier.f16").exists()
-    assert (cache / "autocorr.f16").exists()
+    # One .npy file per track, per feature.
+    assert (cache / "mel" / "track_0000.npy").exists()
+    assert (cache / "fourier" / "track_0000.npy").exists()
+    assert (cache / "autocorr" / "track_0000.npy").exists()
+    # A file per track under each feature dir.
+    assert len(list((cache / "autocorr").glob("track_*.npy"))) == len(records)
     assert set(result.feature_shapes) == {"mel", "fourier", "autocorr"}
     assert result.n_tracks == len(records)
 
