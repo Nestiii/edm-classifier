@@ -57,6 +57,10 @@ class TempoBranch(nn.Module):
 
     def __init__(self, n_bins: int, out_channels: int = 64) -> None:
         super().__init__()
+        # Normalize each tempo bin (stand-in for the paper's z-score) before the
+        # convs: raw Fourier/autocorr magnitudes are on a very different scale
+        # than the (dB) mel, and feeding them unnormalized cripples this branch.
+        self.bn_in = nn.BatchNorm1d(n_bins)
         # Four parallel 1-D convs with different kernels/strides (Pons et al.).
         specs = [(3, 2), (3, 3), (5, 3), (5, 5)]
         self.convs = nn.ModuleList(
@@ -66,7 +70,7 @@ class TempoBranch(nn.Module):
         self.out_dim = out_channels * len(specs)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = x.squeeze(1)  # (batch, n_bins, n_frames)
+        x = self.bn_in(x.squeeze(1))  # (batch, n_bins, n_frames), per-bin normalized
         feats = [F.adaptive_avg_pool1d(F.relu(conv(x)), 1).flatten(1) for conv in self.convs]
         return self.bn(torch.cat(feats, dim=1))
 
