@@ -125,3 +125,50 @@ con deep house / melodic techno). Se adopta v2 como campeón por el mejor top-2 
 la mejor calibración. Para superar el techo de top-1 haría falta una palanca de
 mayor contexto temporal (tempograma / segmentos más largos), que requiere
 re-preprocesar.
+
+---
+
+## v3 — Fusión mel + tempogramas (resultado negativo)
+
+**Fecha:** 2026-08. Se implementó la fusión tardía mel + Fourier/autocorrelación
+tempograma (arquitectura `models/fusion.py`), siguiendo Hsu et al. 2021
+(arXiv:2110.08862). Mismo caché de segmentación, mismo split que v1/v2.
+
+Se corrieron dos variantes:
+- **v3:** tempogramas sin normalizar a la entrada de la rama de fusión.
+- **v3.1:** con `BatchNorm` por bin a la entrada de cada rama de tempograma
+  (stand-in del z-score del paper).
+
+### Métricas (test set, track-level)
+
+| Modelo | Accuracy | Top-2 | Macro F1 |
+|---|---|---|---|
+| **v2 (mel solo, campeón)** | **0.800** | **0.917** | **0.799** |
+| v3 (fusión, sin norm) | 0.733 | 0.858 | 0.730 |
+| v3.1 (fusión, con norm) | 0.767 | 0.892 | 0.768 |
+
+### Análisis
+1. **La normalización de los tempogramas importa:** v3 → v3.1 subió de 0.733 a
+   0.767. Alimentar la magnitud cruda del tempograma (escala muy distinta al mel
+   en dB) a las convs degrada la rama. Corregido con BatchNorm de entrada.
+2. **Aun corregido, la fusión no supera al mel solo (v2).** El tempograma **sí**
+   ayudó a *melodic techno* (F1 0.81 vs 0.75), pero **no** al cuello de botella:
+   *progressive* siguió siendo el peor (F1 0.33), confundido con *deep house* y
+   *trance*.
+3. **Causa fundamental:** el cluster confundible (deep house / progressive /
+   melodic techno) es la familia "house", con **BPM muy similar (~120-124)**. El
+   tempograma distingue subgéneros de *tempo distinto* (los 30 del paper, ej.
+   uplifting-trance ~140 vs tech-trance), pero **no puede separar subgéneros que
+   comparten tempo**. Además, con solo 560 tracks de train, la capacidad extra de
+   las tres ramas **overfittea** (val_acc topa ~0.677 < 0.705 de v2).
+
+### Conclusión
+**Resultado negativo bien fundamentado, no un fracaso de implementación.** La
+fusión con tempograma —validada en la literatura para datasets grandes y
+subgéneros de tempo diverso— **no transfiere a este dataset** (8 subgéneros del
+espectro house/techno con tempos solapados, 100 tracks/género). **Se conserva v2
+(mel solo) como modelo final.** El aporte del tempograma queda documentado como
+dependiente de la separabilidad por tempo de las clases confundibles.
+
+### Artefactos
+- v3: `run_v3/`; v3.1: `run_v3_1/`; campeón final: `model_v2_champion/`.
