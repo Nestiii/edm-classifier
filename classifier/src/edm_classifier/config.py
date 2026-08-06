@@ -63,7 +63,7 @@ SUPPORTED_EXTENSIONS: tuple[str, ...] = (".mp3", ".aiff", ".aif", ".wav")
 
 # Folder where low-confidence tracks are placed instead of a subgenre folder,
 # so the user can review them (their 2nd choice is surfaced in the UI).
-REVIEW_DIRNAME: str = "Revisar"
+REVIEW_DIRNAME: str = "Review"
 
 
 def dirname_for(subgenre: str) -> str:

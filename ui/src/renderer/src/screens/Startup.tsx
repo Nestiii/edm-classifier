@@ -1,23 +1,43 @@
-// Screen 04: startup states — loading the model, or backend not reachable.
+// Screen 04: startup + error states.
+//  - loading the model (optionally showing the device)
+//  - backend not reachable (retry)
+//  - a job that failed (show the error, go back)
 
 interface Props {
   error: boolean
   onRetry: () => void
+  device?: string | null
+  jobError?: string | null
+  onBack?: () => void
 }
 
-function Startup({ error, onRetry }: Props): JSX.Element {
+function Startup({ error, onRetry, device, jobError, onBack }: Props): JSX.Element {
+  if (jobError) {
+    return (
+      <main className="app">
+        <p className="eyebrow">Something went wrong</p>
+        <h1 className="screen-title">We couldn't finish</h1>
+        <p className="screen-sub">{jobError}</p>
+        <div className="actions">
+          <button className="btn-primary" onClick={onBack ?? onRetry}>
+            Back
+          </button>
+        </div>
+      </main>
+    )
+  }
+
   if (error) {
     return (
       <main className="app">
-        <p className="eyebrow">No se pudo iniciar</p>
-        <h1 className="screen-title">El módulo de clasificación no responde</h1>
+        <p className="eyebrow">No connection</p>
+        <h1 className="screen-title">Couldn't reach the classifier</h1>
         <p className="screen-sub">
-          La interfaz no logró conectarse al servicio local de análisis. Verificá que esté
-          instalado y volvé a intentar.
+          The analysis service isn't available. Make sure it's running and try again.
         </p>
         <div className="actions">
           <button className="btn-primary" onClick={onRetry}>
-            Reintentar
+            Retry
           </button>
         </div>
       </main>
@@ -26,12 +46,14 @@ function Startup({ error, onRetry }: Props): JSX.Element {
 
   return (
     <main className="app">
-      <p className="eyebrow">Iniciando</p>
-      <h1 className="screen-title">Cargando el modelo de clasificación</h1>
+      <p className="eyebrow">Subgenre Sorter</p>
+      <h1 className="screen-title">Getting ready</h1>
       <div className="progress-track">
         <div className="progress-fill indeterminate" />
       </div>
-      <p className="meta">Puede tardar unos segundos la primera vez.</p>
+      <p className="meta">
+        One moment.{device ? ` Running on ${device.toUpperCase()}.` : ''}
+      </p>
     </main>
   )
 }

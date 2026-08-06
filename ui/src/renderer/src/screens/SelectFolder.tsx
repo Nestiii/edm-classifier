@@ -1,14 +1,22 @@
-// Screen 01: pick a folder of tracks. Also covers the "no audio" empty state.
+// Screen 01: pick a folder, configure the run, and start a preview.
 
 import { useState } from 'react'
 
-interface Props {
-  onStart: (directory: string) => void
+export interface RunOptions {
+  directory: string
+  recursive: boolean
+  confidenceThreshold: number
 }
 
-function SelectFolder({ onStart }: Props): JSX.Element {
+interface Props {
+  onPreview: (opts: RunOptions) => void
+}
+
+function SelectFolder({ onPreview }: Props): JSX.Element {
   const [directory, setDirectory] = useState<string | null>(null)
   const [counts, setCounts] = useState<{ supported: number; ignored: number } | null>(null)
+  const [recursive, setRecursive] = useState(false)
+  const [threshold, setThreshold] = useState(0.5)
 
   async function pick(): Promise<void> {
     const dir = await window.api.selectDirectory()
@@ -22,49 +30,80 @@ function SelectFolder({ onStart }: Props): JSX.Element {
 
   return (
     <main className="app">
-      <p className="eyebrow">Paso 1 de 2</p>
-      <h1 className="screen-title">Elegí la carpeta con tus tracks</h1>
+      <p className="eyebrow">Subgenre Sorter</p>
+      <h1 className="screen-title">Sort your library by subgenre</h1>
       <p className="screen-sub">
-        Se analizan los archivos MP3, AIFF y WAV del directorio y se mueven a subcarpetas por
-        subgénero.
+        Pick a folder of tracks. We analyze every MP3, AIFF, or WAV and show you a preview before
+        touching anything.
       </p>
 
       <div className="field">
         <span className={directory ? 'path mono' : 'path placeholder mono'}>
-          {directory ?? 'Ninguna carpeta seleccionada'}
+          {directory ?? 'No folder selected'}
         </span>
         <button className="btn-secondary" onClick={pick}>
-          Elegir carpeta…
+          Choose folder…
         </button>
       </div>
 
       {directory && !noAudio && (
         <>
           <p className="meta">
-            {supported} archivo{supported === 1 ? '' : 's'} de audio detectado
-            {supported === 1 ? '' : 's'} (MP3, AIFF, WAV)
+            {supported} audio file{supported === 1 ? '' : 's'} found (MP3, AIFF, WAV)
           </p>
           {counts!.ignored > 0 && (
             <p className="meta">
-              {counts!.ignored} archivo{counts!.ignored === 1 ? '' : 's'} ignorado
-              {counts!.ignored === 1 ? '' : 's'} por formato no soportado
+              {counts!.ignored} file{counts!.ignored === 1 ? '' : 's'} skipped (unsupported format)
             </p>
           )}
+
+          <div className="options">
+            <label className="opt-toggle">
+              <input
+                type="checkbox"
+                checked={recursive}
+                onChange={(e) => setRecursive(e.target.checked)}
+              />
+              <span>Include subfolders</span>
+            </label>
+
+            <div className="opt-slider">
+              <div className="opt-slider-head">
+                <span>Review threshold</span>
+                <span className="mono">{Math.round(threshold * 100)}%</span>
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={0.95}
+                step={0.05}
+                value={threshold}
+                onChange={(e) => setThreshold(Number(e.target.value))}
+              />
+              <p className="opt-hint">
+                Tracks below this confidence go to the <code>Review</code> folder.
+              </p>
+            </div>
+          </div>
         </>
       )}
 
       {noAudio && (
         <p className="meta">
-          La carpeta no contiene audio compatible. Elegí un directorio con archivos MP3, AIFF o
-          WAV. Los subdirectorios no se recorren.
+          No supported audio in this folder. Try one with MP3, AIFF, or WAV files.
         </p>
       )}
 
       <div className="actions">
-        <button className="btn-primary" disabled={!directory || noAudio} onClick={() => onStart(directory!)}>
-          {supported > 0 ? `Clasificar ${supported} archivos` : 'Clasificar'}
+        <button
+          className="btn-primary"
+          disabled={!directory || noAudio}
+          onClick={() =>
+            onPreview({ directory: directory!, recursive, confidenceThreshold: threshold })
+          }
+        >
+          {supported > 0 ? `Analyze ${supported} tracks` : 'Analyze'}
         </button>
-        {!noAudio && <span className="note">Los originales se mueven, no se copian.</span>}
       </div>
     </main>
   )

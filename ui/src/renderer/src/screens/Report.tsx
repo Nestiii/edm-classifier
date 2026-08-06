@@ -1,5 +1,8 @@
 // Screen 03: final report with per-subgenre distribution and summary stats.
 
+import { useState } from 'react'
+
+import ResultsList from '../components/ResultsList'
 import type { Job } from '../api/types'
 import { dirnameFor, pct, seconds } from '../lib/format'
 
@@ -10,6 +13,7 @@ interface Props {
 }
 
 function Report({ job, onOpenFolder, onRestart }: Props): JSX.Element {
+  const [showAll, setShowAll] = useState(false)
   const entries = Object.entries(job.subgenre_counts).filter(([, n]) => n > 0)
   const organized = entries.reduce((sum, [, n]) => sum + n, 0)
   const max = Math.max(1, ...entries.map(([, n]) => n))
@@ -18,25 +22,24 @@ function Report({ job, onOpenFolder, onRestart }: Props): JSX.Element {
 
   return (
     <main className="app">
-      <p className="eyebrow">Listo</p>
-      <h1 className="screen-title">{organized} tracks organizados</h1>
+      <p className="eyebrow">Done</p>
+      <h1 className="screen-title">{organized} tracks organized</h1>
 
       <div className="stats">
         {job.average_confidence != null && (
           <div className="stat">
-            <div className="label">Confianza media</div>
+            <div className="label">Avg. confidence</div>
             <div className="value">{pct(job.average_confidence)}</div>
           </div>
         )}
         <div className="stat">
-          <div className="label">Tiempo total</div>
+          <div className="label">Total time</div>
           <div className="value">{seconds(job.elapsed_seconds)}</div>
         </div>
       </div>
 
       <p className="meta mono">
-        {job.directory} · {folders} subcarpeta{folders === 1 ? '' : 's'} creada
-        {folders === 1 ? '' : 's'}
+        {job.directory} · {folders} subfolder{folders === 1 ? '' : 's'} created
       </p>
 
       <div className="dist">
@@ -53,22 +56,27 @@ function Report({ job, onOpenFolder, onRestart }: Props): JSX.Element {
 
       {job.review_count > 0 && (
         <p className="meta">
-          {job.review_count} track{job.review_count === 1 ? '' : 's'} con confianza baja quedaron
-          en /Revisar, con su 2ª opción anotada.
+          {job.review_count} track{job.review_count === 1 ? '' : 's'} with low confidence went to
+          the Review folder, with their 2nd choice noted.
         </p>
       )}
       {unreadable > 0 && (
         <p className="meta">
-          {unreadable} archivo{unreadable === 1 ? '' : 's'} no se pudo leer y quedó en su lugar.
+          {unreadable} file{unreadable === 1 ? '' : 's'} couldn&apos;t be read and stayed in place.
         </p>
       )}
 
+      <button className="btn-link" onClick={() => setShowAll((v) => !v)}>
+        {showAll ? 'Hide details' : `Show all ${job.results.length} files`}
+      </button>
+      {showAll && <ResultsList results={job.results} />}
+
       <div className="actions">
         <button className="btn-primary" onClick={onOpenFolder}>
-          Abrir carpeta
+          Open folder
         </button>
         <button className="btn-link" onClick={onRestart}>
-          Clasificar otra carpeta
+          Sort another folder
         </button>
       </div>
     </main>
