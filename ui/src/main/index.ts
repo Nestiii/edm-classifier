@@ -1,5 +1,9 @@
-import { join } from 'path'
+import { join, extname } from 'path'
+import { readdirSync, statSync } from 'fs'
 import { app, shell, BrowserWindow, ipcMain, dialog } from 'electron'
+
+// Audio formats the classifier supports (mirrors config.SUPPORTED_EXTENSIONS).
+const SUPPORTED_EXTENSIONS = new Set(['.mp3', '.aiff', '.aif', '.wav'])
 
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
@@ -38,6 +42,26 @@ ipcMain.handle('dialog:selectDirectory', async () => {
   if (result.canceled || result.filePaths.length === 0) return null
   return result.filePaths[0]
 })
+
+// IPC: count supported vs ignored audio files directly in a directory.
+ipcMain.handle('fs:countAudio', (_event, dir: string) => {
+  let supported = 0
+  let ignored = 0
+  try {
+    for (const name of readdirSync(dir)) {
+      const full = join(dir, name)
+      if (!statSync(full).isFile()) continue
+      if (SUPPORTED_EXTENSIONS.has(extname(name).toLowerCase())) supported++
+      else ignored++
+    }
+  } catch {
+    return { supported: 0, ignored: 0 }
+  }
+  return { supported, ignored }
+})
+
+// IPC: reveal a path in the OS file manager (Req 2.5 "Abrir carpeta").
+ipcMain.handle('shell:openPath', (_event, path: string) => shell.openPath(path))
 
 app.whenReady().then(() => {
   createWindow()

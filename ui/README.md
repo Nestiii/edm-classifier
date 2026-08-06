@@ -48,5 +48,28 @@ src/
 ## Comunicación con el clasificador
 
 El renderer nunca accede a Node/Electron directamente: usa el objeto `window.api`
-expuesto por el preload. La clasificación se delegará al servicio `classifier`
-(FastAPI en `localhost`), manteniendo ambos módulos desacoplados.
+expuesto por el preload (selección de carpeta, conteo de audio, abrir carpeta).
+La clasificación se delega al servicio `classifier` (FastAPI en
+`http://127.0.0.1:8000`) vía `fetch`, manteniendo ambos módulos desacoplados.
+
+Para probar la app end-to-end, primero levantá la API:
+
+```bash
+# en classifier/
+uv run edm-classifier serve --model path/to/model.pt --port 8000
+# en ui/
+npm run dev
+```
+
+## Pantallas (flujo)
+
+Máquina de estados en `src/renderer/src/App.tsx`:
+
+1. **Startup** — poll `GET /health` hasta que el modelo esté cargado; si no
+   responde, muestra el error con "Reintentar".
+2. **SelectFolder** — elige carpeta, cuenta audio soportado/ignorado, o el estado
+   vacío "sin audio compatible".
+3. **Progress** — `POST /jobs` y polling de `GET /jobs/{id}`: progreso, ETA,
+   últimos resultados con subgénero + confianza (y 2ª opción si es baja).
+4. **Report** — distribución por subcarpeta, confianza media, tiempo total,
+   "Abrir carpeta". Los tracks de baja confianza van a `/Revisar`.
