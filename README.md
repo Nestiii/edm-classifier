@@ -43,7 +43,7 @@ edm-classifier/
 
 ## Documentación
 
-- [Plan de trabajo](./docs/plan-de-trabajo.pdf)
+- [Plan de trabajo](docs/resources/plan-de-trabajo.pdf)
 
 ## Desarrollo
 
