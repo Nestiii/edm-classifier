@@ -11,7 +11,7 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
-from edm_classifier.config import dirname_for
+from edm_classifier.config import REVIEW_DIRNAME, dirname_for
 
 
 def unique_destination(dest_dir: Path, filename: str) -> Path:
@@ -28,25 +28,10 @@ def unique_destination(dest_dir: Path, filename: str) -> Path:
         i += 1
 
 
-def organize_file(
-    source: str | Path,
-    base_dir: str | Path,
-    subgenre: str,
-    move: bool = True,
-) -> Path:
-    """Place ``source`` under ``<base_dir>/<subgenre_dirname>/``.
-
-    Args:
-        source: The audio file to organize.
-        base_dir: Root under which per-subgenre folders are created.
-        subgenre: Canonical subgenre label (its dirname is looked up).
-        move: Move the file when True, copy it when False.
-
-    Returns:
-        The destination path.
-    """
+def place_file(source: str | Path, dest_dir: str | Path, move: bool = True) -> Path:
+    """Move/copy ``source`` into ``dest_dir`` (created if needed), collision-safe."""
     source = Path(source)
-    dest_dir = Path(base_dir) / dirname_for(subgenre)
+    dest_dir = Path(dest_dir)
     dest_dir.mkdir(parents=True, exist_ok=True)
     dest = unique_destination(dest_dir, source.name)
 
@@ -59,3 +44,18 @@ def organize_file(
     else:
         shutil.copy2(str(source), str(dest))
     return dest
+
+
+def organize_file(
+    source: str | Path,
+    base_dir: str | Path,
+    subgenre: str,
+    move: bool = True,
+) -> Path:
+    """Place ``source`` under ``<base_dir>/<subgenre_dirname>/``."""
+    return place_file(source, Path(base_dir) / dirname_for(subgenre), move=move)
+
+
+def review_file(source: str | Path, base_dir: str | Path, move: bool = True) -> Path:
+    """Place a low-confidence ``source`` under ``<base_dir>/Revisar/``."""
+    return place_file(source, Path(base_dir) / REVIEW_DIRNAME, move=move)

@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from edm_classifier.api.organizer import organize_file, unique_destination
-from edm_classifier.config import dirname_for
+from edm_classifier.api.organizer import organize_file, review_file, unique_destination
+from edm_classifier.config import REVIEW_DIRNAME, dirname_for
 
 
 def _touch(path: Path) -> Path:
@@ -37,6 +37,14 @@ def test_name_collision_is_suffixed(tmp_path: Path):
     dest = organize_file(src, tmp_path, "tech house", move=True)
     assert dest.name == "track (1).wav"
     assert dest.exists()
+
+
+def test_review_file_goes_to_review_folder(tmp_path: Path):
+    src = _touch(tmp_path / "track.wav")
+    dest = review_file(src, tmp_path, move=True)
+    assert dest == tmp_path / REVIEW_DIRNAME / "track.wav"
+    assert dest.exists()
+    assert not src.exists()
 
 
 def test_unique_destination(tmp_path: Path):

@@ -15,12 +15,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol
 
-from edm_classifier.api.organizer import organize_file
+from edm_classifier.api.organizer import organize_file, review_file
 from edm_classifier.api.schemas import (
     FileResult,
     JobMode,
     JobResponse,
     JobStatus,
+    Top2Item,
 )
 from edm_classifier.config import SUBGENRES, SUPPORTED_EXTENSIONS
 
@@ -49,10 +50,12 @@ class Job:
     mode: JobMode
     recursive: bool
     total: int
+    confidence_threshold: float = 0.0
     status: JobStatus = JobStatus.pending
     processed: int = 0
     current_file: str | None = None
     subgenre_counts: dict[str, int] = field(default_factory=lambda: dict.fromkeys(SUBGENRES, 0))
+    review_count: int = 0
     confidence_sum: float = 0.0
     results: list[FileResult] = field(default_factory=list)
     error: str | None = None
@@ -80,6 +83,7 @@ class Job:
                 processed=self.processed,
                 current_file=self.current_file,
                 subgenre_counts=dict(self.subgenre_counts),
+                review_count=self.review_count,
                 average_confidence=avg_conf,
                 elapsed_seconds=elapsed,
                 eta_seconds=eta,
@@ -96,7 +100,13 @@ class JobManager:
         self._jobs: dict[str, Job] = {}
         self._lock = threading.Lock()
 
-    def create(self, directory: str, mode: JobMode, recursive: bool) -> Job:
+    def create(
+        self,
+        directory: str,
+        mode: JobMode,
+        recursive: bool,
+        confidence_threshold: float = 0.0,
+    ) -> Job:
         root = Path(directory)
         if not root.is_dir():
             raise FileNotFoundError(f"Directory not found: {directory}")
@@ -107,6 +117,7 @@ class JobManager:
             mode=mode,
             recursive=recursive,
             total=len(files),
+            confidence_threshold=confidence_threshold,
         )
         with self._lock:
             self._jobs[job.job_id] = job
@@ -141,26 +152,40 @@ class JobManager:
                     job.current_file = str(path)
 
                 prediction = self.predictor.predict_track(path)
+                is_review = float(prediction.confidence) < job.confidence_threshold
 
                 organized_path: str | None = None
                 if job.mode in (JobMode.move, JobMode.copy):
-                    dest = organize_file(
-                        path, job.directory, prediction.subgenre, move=job.mode == JobMode.move
-                    )
+                    move = job.mode == JobMode.move
+                    if is_review:
+                        dest = review_file(path, job.directory, move=move)
+                    else:
+                        dest = organize_file(path, job.directory, prediction.subgenre, move=move)
                     organized_path = str(dest)
+
+                # Second choice from top-2, surfaced for review tracks.
+                second = None
+                if len(prediction.top2) > 1:
+                    s_name, s_prob = prediction.top2[1]
+                    second = Top2Item(subgenre=s_name, probability=float(s_prob))
 
                 with job.lock:
                     job.processed += 1
                     job.confidence_sum += float(prediction.confidence)
-                    job.subgenre_counts[prediction.subgenre] = (
-                        job.subgenre_counts.get(prediction.subgenre, 0) + 1
-                    )
+                    if is_review:
+                        job.review_count += 1
+                    else:
+                        job.subgenre_counts[prediction.subgenre] = (
+                            job.subgenre_counts.get(prediction.subgenre, 0) + 1
+                        )
                     job.results.append(
                         FileResult(
                             path=str(path),
                             subgenre=prediction.subgenre,
                             confidence=float(prediction.confidence),
                             organized_path=organized_path,
+                            review=is_review,
+                            second_choice=second if is_review else None,
                         )
                     )
             with job.lock:

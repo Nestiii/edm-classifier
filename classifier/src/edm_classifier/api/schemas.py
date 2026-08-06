@@ -50,6 +50,12 @@ class JobRequest(BaseModel):
     directory: str = Field(..., description="Directory containing audio files to classify.")
     mode: JobMode = JobMode.move
     recursive: bool = Field(False, description="Recurse into subdirectories.")
+    confidence_threshold: float = Field(
+        0.0,
+        ge=0.0,
+        le=1.0,
+        description="Tracks below this confidence go to a 'Revisar' folder (0 = disabled).",
+    )
 
 
 class JobStatus(StrEnum):
@@ -65,6 +71,8 @@ class FileResult(BaseModel):
     subgenre: str
     confidence: float
     organized_path: str | None = None  # where the file was moved/copied, if any
+    review: bool = False  # True when sent to the 'Revisar' folder (low confidence)
+    second_choice: Top2Item | None = None  # surfaced for review tracks
 
 
 class JobResponse(BaseModel):
@@ -78,6 +86,7 @@ class JobResponse(BaseModel):
     processed: int
     current_file: str | None = None
     subgenre_counts: dict[str, int] = {}
+    review_count: int = 0
     average_confidence: float | None = None
     elapsed_seconds: float | None = None
     eta_seconds: float | None = None

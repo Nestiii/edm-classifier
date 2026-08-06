@@ -61,6 +61,10 @@ SUBGENRE_TO_INDEX: dict[str, int] = {name: i for i, name in enumerate(SUBGENRES)
 # File extensions the system is required to support (MP3, AIFF, WAV).
 SUPPORTED_EXTENSIONS: tuple[str, ...] = (".mp3", ".aiff", ".aif", ".wav")
 
+# Folder where low-confidence tracks are placed instead of a subgenre folder,
+# so the user can review them (their 2nd choice is surfaced in the UI).
+REVIEW_DIRNAME: str = "Revisar"
+
 
 def dirname_for(subgenre: str) -> str:
     """Return the filesystem-safe directory name for a subgenre label."""

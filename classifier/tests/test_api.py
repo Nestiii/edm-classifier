@@ -128,6 +128,33 @@ def test_batch_job_move_organizes_files(client: TestClient, dataset_dir: Path):
     assert not list(work.glob("*.wav"))  # all moved out of the root
 
 
+def test_batch_job_low_confidence_goes_to_review(client: TestClient, tmp_path: Path):
+    import soundfile as sf
+
+    from edm_classifier.config import REVIEW_DIRNAME, settings
+
+    work = tmp_path / "inbox"
+    work.mkdir()
+    sr = settings.audio.sample_rate
+    for i in range(2):
+        sf.write(work / f"t{i}.wav", [0.0] * sr, sr, subtype="PCM_16")
+
+    # FakePredictor confidence is 0.86; a 0.95 threshold sends everything to review.
+    resp = client.post(
+        "/jobs", json={"directory": str(work), "mode": "move", "confidence_threshold": 0.95}
+    )
+    data = _wait_for_job(client, resp.json()["job_id"])
+    assert data["status"] == "completed"
+    assert data["review_count"] == 2
+    assert sum(data["subgenre_counts"].values()) == 0  # none organized by subgenre
+    review_dir = work / REVIEW_DIRNAME
+    assert review_dir.is_dir() and len(list(review_dir.glob("*.wav"))) == 2
+    for result in data["results"]:
+        assert result["review"] is True
+        assert result["second_choice"] is not None
+        assert REVIEW_DIRNAME in result["organized_path"]
+
+
 def test_batch_job_classify_only_does_not_move(client: TestClient, tmp_path: Path):
     import soundfile as sf
 

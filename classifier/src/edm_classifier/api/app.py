@@ -90,7 +90,9 @@ def create_app(model_service: ModelService | None = None) -> FastAPI:
     @app.post("/jobs", response_model=JobCreatedResponse)
     def create_job(req: JobRequest) -> JobCreatedResponse:
         try:
-            job = app.state.job_manager.create(req.directory, req.mode, req.recursive)
+            job = app.state.job_manager.create(
+                req.directory, req.mode, req.recursive, req.confidence_threshold
+            )
         except FileNotFoundError as exc:
             raise HTTPException(404, str(exc)) from exc
         return JobCreatedResponse(job_id=job.job_id, status=job.status, total=job.total)
