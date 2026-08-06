@@ -55,9 +55,18 @@ class Predictor:
         device: str | torch.device = "cpu",
         **model_kwargs: int,
     ) -> Predictor:
-        """Load a serialized state_dict into a fresh model."""
-        model = build_model(**model_kwargs)
+        """Load a serialized checkpoint into a fresh model.
+
+        Model hyperparameters (``n_channels``, ``dropout``) are read from the
+        checkpoint's ``model_kwargs`` when present, so callers need not know how
+        the model was configured. Explicit ``model_kwargs`` override them.
+        """
         state = torch.load(checkpoint_path, map_location="cpu")
+        kwargs: dict[str, int] = {}
+        if isinstance(state, dict):
+            kwargs.update(state.get("model_kwargs", {}))
+        kwargs.update(model_kwargs)
+        model = build_model(**kwargs)
         # Accept either a bare state_dict or a {'model': state_dict} wrapper.
         if isinstance(state, dict) and "model" in state:
             state = state["model"]

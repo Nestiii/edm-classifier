@@ -76,6 +76,32 @@ en `config.py`, tuneable en WBS 4.5).
 paquete, monta Drive y corre el mismo flujo sobre GPU. El audio crudo se queda en
 Drive; solo se preprocesa una vez y el caché (~1 GB) se guarda en Drive.
 
+## API de inferencia (para la app de escritorio)
+
+Servidor FastAPI local que la UI consume por HTTP. El clasificador es
+independiente de la interfaz (Req 5.1).
+
+```bash
+# Levanta la API con el modelo entrenado
+uv run edm-classifier serve --model path/to/model.pt --port 8000
+# (o exportá EDM_API_MODEL_PATH y corré `serve` sin --model)
+```
+
+Endpoints:
+
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| `GET` | `/health` | Estado del servicio + si el modelo está cargado |
+| `GET` | `/subgenres` | Los 8 subgéneros |
+| `POST` | `/classify` | Clasifica un archivo `{ "path": "..." }` → subgénero + confianza + top-2 |
+| `POST` | `/jobs` | Inicia un lote sobre un directorio `{ "directory", "mode", "recursive" }` |
+| `GET` | `/jobs/{id}` | Progreso del lote (procesados, ETA, conteo por subgénero, resultados) |
+| `DELETE` | `/jobs/{id}` | Cancela un lote en curso |
+
+`mode` del lote: `classify` (solo predice), `move` (organiza moviendo a
+subcarpetas por subgénero — Req 2.3/2.4) o `copy`. El servicio nunca guarda copia
+de los audios del usuario (Req 7.1): solo reubica los originales.
+
 ## Tests
 
 ```bash

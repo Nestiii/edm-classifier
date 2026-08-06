@@ -87,6 +87,24 @@ def _cmd_train(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_serve(args: argparse.Namespace) -> int:
+    import uvicorn
+
+    from edm_classifier.api.app import create_app
+    from edm_classifier.api.model_service import ModelService
+
+    service = ModelService()
+    if args.model:
+        service.load(args.model, device=args.device)
+        print(f"Loaded model from {args.model} on {service.device}")
+    else:
+        print("No --model given; API up but model not loaded (set EDM_API_MODEL_PATH).")
+
+    app = create_app(service)
+    uvicorn.run(app, host=args.host, port=args.port)
+    return 0
+
+
 def _cmd_evaluate(args: argparse.Namespace) -> int:
     import json
 
@@ -155,6 +173,15 @@ def build_parser() -> argparse.ArgumentParser:
     p_eval.add_argument("--partition", default="test", choices=["train", "val", "test"])
     p_eval.add_argument("--device", default="auto", help="auto|cuda|mps|cpu")
     p_eval.set_defaults(func=_cmd_evaluate)
+
+    p_serve = sub.add_parser("serve", help="Run the local inference API for the desktop UI.")
+    p_serve.add_argument(
+        "--model", default=None, help="Path to model.pt (else EDM_API_MODEL_PATH)."
+    )
+    p_serve.add_argument("--host", default="127.0.0.1")
+    p_serve.add_argument("--port", type=int, default=8000)
+    p_serve.add_argument("--device", default="auto", help="auto|cuda|mps|cpu")
+    p_serve.set_defaults(func=_cmd_serve)
 
     return parser
 

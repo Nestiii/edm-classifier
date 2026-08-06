@@ -145,6 +145,17 @@ class DatasetConfig(BaseSettings):
     seed: int = 42
 
 
+class ApiConfig(BaseSettings):
+    """Inference API parameters."""
+
+    model_config = SettingsConfigDict(env_prefix="EDM_API_")
+
+    # Path to the trained checkpoint (model.pt). When unset, the API starts but
+    # reports the model as not loaded until a path is provided.
+    model_path: str | None = None
+    device: str = "auto"  # auto | cuda | mps | cpu
+
+
 class Settings(BaseSettings):
     """Top-level settings aggregating every config group."""
 
@@ -153,6 +164,7 @@ class Settings(BaseSettings):
     audio: AudioConfig = Field(default_factory=AudioConfig)
     features: FeatureConfig = Field(default_factory=FeatureConfig)
     dataset: DatasetConfig = Field(default_factory=DatasetConfig)
+    api: ApiConfig = Field(default_factory=ApiConfig)
 
 
 settings = Settings()
