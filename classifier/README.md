@@ -102,6 +102,15 @@ Endpoints:
 subcarpetas por subgénero — Req 2.3/2.4) o `copy`. El servicio nunca guarda copia
 de los audios del usuario (Req 7.1): solo reubica los originales.
 
+## Benchmark de tiempo (Req 1.5)
+
+Mide el tiempo de procesamiento por track (< 5 s):
+
+```bash
+uv run edm-classifier benchmark --model models/model.pt --directory path/to/tracks
+# → mean/max/min segundos por track y si cumple el objetivo
+```
+
 ## Tests
 
 ```bash

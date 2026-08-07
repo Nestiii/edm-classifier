@@ -85,6 +85,19 @@ Orden: 0 deep house · 1 tech house · 2 melodic techno · 3 progressive ·
 - Checkpoint del mejor modelo: `run/model.pt` (incluye `model_kwargs` + `config`).
 - Reporte completo: `run/report.json` (history + métricas + matriz de confusión).
 
+### Tiempo de procesamiento (Req 1.5: < 5 s por track)
+
+Medido con `edm-classifier benchmark` sobre tracks de ~4 minutos (carga de audio
++ extracción de features + inferencia + agregación por track):
+
+| Hardware | Tiempo medio | Tiempo máximo | Objetivo |
+|----------|--------------|---------------|----------|
+| GPU (Apple MPS) | 0.25 s | 0.25 s | < 5 s ✅ |
+| CPU | 1.04 s | 1.27 s | < 5 s ✅ |
+
+El requisito se cumple con amplio margen incluso sin GPU dedicada (~4× más rápido
+que el límite en CPU, ~20× en GPU).
+
 ---
 
 ## v2 — + label smoothing + cosine LR (campeón actual)

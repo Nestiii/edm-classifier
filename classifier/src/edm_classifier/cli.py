@@ -87,6 +87,23 @@ def _cmd_train(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_benchmark(args: argparse.Namespace) -> int:
+    import json
+
+    from edm_classifier.api.model_service import resolve_device
+    from edm_classifier.inference.benchmark import benchmark_tracks, find_audio
+    from edm_classifier.inference.predictor import Predictor
+
+    paths = find_audio(args.directory)
+    if not paths:
+        print(f"No supported audio files in {args.directory}")
+        return 1
+    predictor = Predictor.from_checkpoint(args.model, device=resolve_device(args.device))
+    result = benchmark_tracks(predictor, paths, warmup=args.warmup)
+    print(json.dumps(result.summary(args.target), indent=2))
+    return 0 if result.meets_target(args.target) else 1
+
+
 def _cmd_serve(args: argparse.Namespace) -> int:
     import uvicorn
 
@@ -173,6 +190,14 @@ def build_parser() -> argparse.ArgumentParser:
     p_eval.add_argument("--partition", default="test", choices=["train", "val", "test"])
     p_eval.add_argument("--device", default="auto", help="auto|cuda|mps|cpu")
     p_eval.set_defaults(func=_cmd_evaluate)
+
+    p_bench = sub.add_parser("benchmark", help="Measure per-track processing time (Req 1.5).")
+    p_bench.add_argument("--model", required=True, help="Path to model.pt.")
+    p_bench.add_argument("--directory", required=True, help="Directory of audio files to time.")
+    p_bench.add_argument("--device", default="auto", help="auto|cuda|mps|cpu")
+    p_bench.add_argument("--target", type=float, default=5.0, help="Target seconds/track.")
+    p_bench.add_argument("--warmup", type=int, default=1, help="Untimed warmup runs.")
+    p_bench.set_defaults(func=_cmd_benchmark)
 
     p_serve = sub.add_parser("serve", help="Run the local inference API for the desktop UI.")
     p_serve.add_argument(
